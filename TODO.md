@@ -8,7 +8,7 @@
 
 ## POIDH bounty runner (Python bot)
 - [x] Review POIDH API/docs: bounty creation, submissions, judging, payouts, and any required attestations.
-- [ ] Choose and initialize the bot wallet; confirm chain/network and funding flow.
+- [x] Choose and initialize the bot wallet; confirm chain/network and funding flow.
 - [ ] Build bot core loop: create bounty -> wait -> evaluate -> select -> pay.
 - [ ] Implement deterministic selection rubric with an optional AI assist (documented).
 - [ ] Add submission verification helpers (image/video checks, metadata capture, integrity checks).
