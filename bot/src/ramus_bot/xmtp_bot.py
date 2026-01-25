@@ -176,7 +176,12 @@ class XmtpBot:
 
     def _handle_admin_command(self, ctx, command: Command) -> str | None:
         if not self._is_operator(ctx):
-            return "Unauthorized: admin commands are restricted to the operator."
+            sender = self._sender_address(ctx) or "unknown"
+            operator = self._resolve_operator_address() or "unknown"
+            return (
+                "Unauthorized: admin commands are restricted to the operator. "
+                f"Sender={sender}, Operator={operator}"
+            )
 
         if command.action == "admin.set_venice_key":
             key = str(command.payload.get("key", "")).strip()
