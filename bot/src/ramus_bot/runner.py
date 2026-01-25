@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from loguru import logger
 
 from .audit import write_decision_report
+from .overrides import load_override
 from .config import BotConfig
 from .evaluator import Evaluator
-from .models import BountySpec
+from .models import BountySpec, Decision
 from .poidh.client import PoidhClient
 from .state import StateStore
 
@@ -17,6 +18,7 @@ from .state import StateStore
 class RunnerConfig:
     poll_interval_seconds: int = 60
     bounty_reward_wei: int = 0
+    min_score_to_award: float = 1.5
 
 
 class BotRunner:
@@ -55,8 +57,25 @@ class BotRunner:
             return
 
         decision = self.evaluator.select_winner(active.bounty_id, claims)
+        override = load_override(self.config.override_path)
+        if override and override.bounty_id == active.bounty_id:
+            if override.action == "skip":
+                logger.warning("Manual override skip for bounty {}", active.bounty_id)
+                return
+            if override.claim_id is not None:
+                decision = Decision(
+                    bounty_id=active.bounty_id,
+                    winner_claim_id=override.claim_id,
+                    reasoning="Manual override used.",
+                    scores=decision.scores,
+                )
         self.state.record_decision(decision)
         write_decision_report(decision, claims, self.config.audit_dir)
+
+        max_score = max(decision.scores.values()) if decision.scores else 0.0
+        if max_score < self.runner_config.min_score_to_award:
+            logger.warning("Score below threshold for bounty {} (score {:.2f}).", active.bounty_id, max_score)
+            return
 
         if decision.winner_claim_id is None:
             logger.info("No winner selected for bounty {}", active.bounty_id)

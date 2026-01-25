@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Iterable
 
 from web3 import Web3
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..config import BotConfig
 from ..models import BountySpec, Claim
@@ -32,6 +33,7 @@ class PoidhClient:
         receipt = self.wallet.web3.eth.wait_for_transaction_receipt(tx_hash)
         return receipt
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10), reraise=True)
     def create_bounty(self, spec: BountySpec) -> int:
         contract = self._contract()
         nonce = self.wallet.web3.eth.get_transaction_count(self.wallet.address)
@@ -52,6 +54,7 @@ class PoidhClient:
         bounty_id = contract.functions.bountyCounter().call()
         return int(bounty_id)
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10), reraise=True)
     def fetch_claims(self, bounty_id: int) -> list[Claim]:
         contract = self._contract()
         claims: list[Claim] = []
@@ -65,6 +68,7 @@ class PoidhClient:
             offset += len(chunk)
         return claims
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10), reraise=True)
     def accept_claim(self, bounty_id: int, claim_id: int) -> str:
         contract = self._contract()
         nonce = self.wallet.web3.eth.get_transaction_count(self.wallet.address)

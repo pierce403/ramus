@@ -14,7 +14,7 @@
 - [x] Add submission verification helpers (image/video checks, metadata capture, integrity checks).
 - [x] Store state (bounty IDs, submissions, decisions, payouts) in a durable store.
 - [x] Add audit log + reasoning report for each bounty run.
-- [ ] Add safety rails: timeouts, retry logic, dispute handling, and manual override hooks.
+- [x] Add safety rails: timeouts, retry logic, dispute handling, and manual override hooks.
 
 ## XMTP integration
 - [ ] Implement XMTP messaging in the Python bot (inbox, outbound status updates).

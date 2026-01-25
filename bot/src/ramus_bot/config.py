@@ -19,6 +19,7 @@ class BotConfig:
     log_level: str
     ai_score_endpoint: str | None
     audit_dir: str
+    override_path: str | None
 
 
 class ConfigError(RuntimeError):
@@ -47,4 +48,5 @@ def load_config() -> BotConfig:
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         ai_score_endpoint=os.getenv("AI_SCORE_ENDPOINT"),
         audit_dir=os.getenv("AUDIT_DIR", "./docs/bounty-runs"),
+        override_path=os.getenv("MANUAL_OVERRIDE_PATH"),
     )
