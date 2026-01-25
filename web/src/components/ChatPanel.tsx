@@ -6,14 +6,17 @@ import {
   type Conversation,
   type Signer,
 } from "@xmtp/browser-sdk";
-import { BrowserProvider, getBytes, type Eip1193Provider } from "ethers";
+import { JsonRpcProvider, Wallet, getBytes } from "ethers";
 
-const BOT_ADDRESS = import.meta.env.VITE_XMTP_BOT_ADDRESS as string | undefined;
+const BOT_ADDRESS =
+  (import.meta.env.VITE_XMTP_BOT_ADDRESS as string | undefined) || "ramus.eth";
 const RAW_ENV = import.meta.env.VITE_XMTP_ENV as string | undefined;
 const XMTP_ENV =
   RAW_ENV === "production" || RAW_ENV === "dev" || RAW_ENV === "local" ? RAW_ENV : "production";
 
 const ENCRYPTION_KEY_STORAGE = "ramus_xmtp_key";
+const EPHEMERAL_KEY_STORAGE = "ramus_ephemeral_key";
+const ENS_RPC_URL = "https://cloudflare-eth.com";
 
 function getOrCreateEncryptionKey(): Uint8Array {
   const stored = localStorage.getItem(ENCRYPTION_KEY_STORAGE);
@@ -29,21 +32,43 @@ function getOrCreateEncryptionKey(): Uint8Array {
 }
 
 async function createSigner(): Promise<Signer> {
-  if (!window.ethereum) {
-    throw new Error("No injected wallet found.");
-  }
-  const provider = new BrowserProvider(window.ethereum as Eip1193Provider);
-  await provider.send("eth_requestAccounts", []);
-  const signer = await provider.getSigner();
-  const address = (await signer.getAddress()).toLowerCase();
+  const wallet = getOrCreateEphemeralWallet();
+  const address = wallet.address.toLowerCase();
   return {
     type: "EOA",
     getIdentifier: () => ({ identifier: address, identifierKind: "Ethereum" }),
     signMessage: async (message: string) => {
-      const signature = await signer.signMessage(message);
+      const signature = await wallet.signMessage(message);
       return getBytes(signature);
     },
   };
+}
+
+function getOrCreateEphemeralWallet(): Wallet {
+  const stored = localStorage.getItem(EPHEMERAL_KEY_STORAGE);
+  if (stored) {
+    return new Wallet(stored);
+  }
+  const wallet = Wallet.createRandom();
+  localStorage.setItem(EPHEMERAL_KEY_STORAGE, wallet.privateKey);
+  return wallet;
+}
+
+async function resolveBotIdentifier(): Promise<string> {
+  const identifier = BOT_ADDRESS.trim();
+  if (!identifier.endsWith(".eth")) {
+    return identifier.toLowerCase();
+  }
+  try {
+    const provider = new JsonRpcProvider(ENS_RPC_URL);
+    const resolved = await provider.resolveName(identifier);
+    if (resolved) {
+      return resolved.toLowerCase();
+    }
+  } catch {
+    // fall through to raw identifier
+  }
+  return identifier.toLowerCase();
 }
 
 export default function ChatPanel() {
@@ -63,8 +88,9 @@ export default function ChatPanel() {
     const signer = await createSigner();
     const key = getOrCreateEncryptionKey();
     const newClient = await Client.create(signer, key, { env: XMTP_ENV });
+    const botIdentifier = await resolveBotIdentifier();
     const dm = await newClient.conversations.newDmWithIdentifier({
-      identifier: BOT_ADDRESS.toLowerCase(),
+      identifier: botIdentifier,
       identifierKind: "Ethereum",
     });
     const consent = await dm.consentState();
@@ -118,7 +144,7 @@ export default function ChatPanel() {
     <section className="chat">
       <header>
         <h3>Speak with Ramus</h3>
-        <p>Connect your wallet to open a direct line to the grove.</p>
+        <p>Open a direct line to the grove with an ephemeral key.</p>
       </header>
       <div className="chat__panel">
         {!isReady ? (
