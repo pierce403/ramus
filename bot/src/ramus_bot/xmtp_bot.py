@@ -19,6 +19,7 @@ class XmtpBot:
         self.config = config
         self.poidh = poidh
         self.state = state
+        self._setup_notified: set[str] = set()
 
     async def start(self) -> None:
         user = create_user(self._xmtp_key())
@@ -38,6 +39,9 @@ class XmtpBot:
             text = str(ctx.message.content)
             command = parse_command(text)
             response = await self._handle_command(command)
+            setup_notice = self._setup_notice(ctx)
+            if setup_notice:
+                response = f"{setup_notice}\n\n{response}"
             await ctx.send_text(response)
 
         logger.info("Starting XMTP agent")
@@ -45,6 +49,32 @@ class XmtpBot:
 
     def _xmtp_key(self) -> str:
         return self.config.xmtp_wallet_key or self.config.wallet_private_key
+
+    def _setup_notice(self, ctx) -> str | None:
+        missing = []
+        if not self.config.poidh_api_key:
+            missing.append("POIDH_API_KEY (optional API access)")
+        if not self.config.ai_score_endpoint:
+            missing.append("AI_SCORE_ENDPOINT (optional AI scoring)")
+
+        if not missing:
+            return None
+
+        sender = (
+            getattr(ctx.message, "sender_address", None)
+            or getattr(ctx.message, "sender", None)
+            or getattr(ctx.message, "from_address", None)
+        )
+        sender_key = str(sender) if sender else "unknown"
+        if sender_key in self._setup_notified:
+            return None
+
+        self._setup_notified.add(sender_key)
+        missing_list = ", ".join(missing)
+        return (
+            "Setup note: this bot is missing optional config values. "
+            f"Operator should set {missing_list} in the bot environment."
+        )
 
     async def _handle_command(self, command: Command) -> str:
         if command.action == "help":

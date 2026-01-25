@@ -39,7 +39,7 @@ def load_config() -> BotConfig:
         poidh_api_base=os.getenv("POIDH_API_BASE", "https://api.poidh.xyz"),
         poidh_chain_id=int(os.getenv("POIDH_CHAIN_ID", "8453")),
         poidh_chain_slug=os.getenv("POIDH_CHAIN_SLUG", "base"),
-        poidh_rpc_url=_require_env("POIDH_RPC_URL"),
+        poidh_rpc_url=os.getenv("POIDH_RPC_URL", "https://mainnet.base.org"),
         poidh_api_key=os.getenv("POIDH_API_KEY"),
         wallet_private_key=_require_env("WALLET_PRIVATE_KEY"),
         wallet_address=os.getenv("WALLET_ADDRESS"),

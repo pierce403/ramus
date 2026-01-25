@@ -29,7 +29,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt
 
 cp .env.example .env
-# Fill in POIDH RPC, wallet key, XMTP settings
+# Fill in wallet key + XMTP settings (Base RPC defaults to https://mainnet.base.org)
 
 python -m ramus_bot
 ```

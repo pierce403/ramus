@@ -35,7 +35,7 @@ load_env() {
 
 validate_env() {
   local missing=()
-  local required_vars=(POIDH_RPC_URL WALLET_PRIVATE_KEY)
+  local required_vars=(WALLET_PRIVATE_KEY)
   for var in "${required_vars[@]}"; do
     if [[ -z "${!var:-}" ]]; then
       missing+=("$var")
