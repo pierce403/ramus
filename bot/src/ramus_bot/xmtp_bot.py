@@ -49,6 +49,7 @@ class XmtpBot:
 
         @agent.on("text")
         async def on_text(ctx) -> None:  # type: ignore[override]
+            self._log_incoming_message(ctx)
             text = str(ctx.message.content)
             command = parse_command(text)
             response = await self._handle_command(ctx, command)
@@ -88,6 +89,73 @@ class XmtpBot:
             f"Operator should set {missing_list} in the bot environment."
         )
 
+    def _log_incoming_message(self, ctx) -> None:
+        sender = self._sender_address(ctx) or "unknown"
+        message = getattr(ctx, "message", None)
+        message_id = getattr(message, "id", None)
+        content = getattr(message, "content", "")
+        content_str = str(content)
+        preview = content_str.replace("\n", " ").strip()
+        if len(preview) > 200:
+            preview = f"{preview[:197]}..."
+        details = self._message_debug_fields(ctx)
+        logger.info(
+            "XMTP inbound message sender={} id={} preview={}",
+            sender,
+            message_id,
+            preview,
+        )
+        if sender == "unknown":
+            logger.warning("XMTP sender unknown. Context fields={}", details)
+        else:
+            logger.debug("XMTP sender details: {}", details)
+
+    def _message_debug_fields(self, ctx) -> dict[str, str]:
+        fields: dict[str, str] = {}
+        for label, obj in (
+            ("ctx", ctx),
+            ("message", getattr(ctx, "message", None)),
+            ("conversation", getattr(ctx, "conversation", None)),
+        ):
+            if not obj:
+                continue
+            for attr in (
+                "sender_address",
+                "senderAddress",
+                "from_address",
+                "fromAddress",
+                "address",
+                "address_bytes",
+                "wallet_address",
+                "walletAddress",
+                "identifier",
+                "identifierAddress",
+                "identifier_address",
+                "account",
+                "accountAddress",
+                "account_address",
+                "peer_address",
+                "peerAddress",
+                "sender",
+                "from",
+                "topic",
+                "id",
+            ):
+                if hasattr(obj, attr):
+                    value = getattr(obj, attr, None)
+                    fields[f"{label}.{attr}"] = self._safe_repr(value)
+        return fields
+
+    def _safe_repr(self, value: Any) -> str:
+        try:
+            text = str(value)
+        except Exception:
+            return "<unprintable>"
+        text = text.replace("\n", " ").strip()
+        if len(text) > 200:
+            return f"{text[:197]}..."
+        return text
+
     def _resolve_operator_address(self) -> str | None:
         if self._operator_address:
             return self._operator_address
@@ -111,6 +179,11 @@ class XmtpBot:
                 return None
 
         try:
+            logger.info(
+                "Resolving operator ENS {} via RPC {}",
+                self.config.operator_ens,
+                self.config.eth_mainnet_rpc_url,
+            )
             w3 = Web3(Web3.HTTPProvider(self.config.eth_mainnet_rpc_url))
             if not w3.is_connected():
                 logger.warning("Failed to connect to mainnet RPC for ENS resolution.")
@@ -123,6 +196,7 @@ class XmtpBot:
                     logger.warning("ENS resolver initialization failed: {}", exc)
                     ens = None
             if ens is None:
+                logger.info("ENS resolver not available; using registry fallback.")
                 address = self._resolve_ens_via_registry(w3, self.config.operator_ens)
             else:
                 address = ens.address(self.config.operator_ens)
@@ -169,6 +243,7 @@ class XmtpBot:
         node = self._namehash(name)
         if not node:
             return None
+        logger.info("ENS registry lookup for {}", name)
         registry_contract = w3.eth.contract(
             address=Web3.to_checksum_address(registry),
             abi=registry_abi,
@@ -180,6 +255,7 @@ class XmtpBot:
             return None
         if not resolver_address or int(resolver_address, 16) == 0:
             return None
+        logger.info("ENS resolver contract {}", resolver_address)
         resolver_contract = w3.eth.contract(
             address=Web3.to_checksum_address(resolver_address),
             abi=resolver_abi,
