@@ -3,7 +3,7 @@ from __future__ import annotations
 from loguru import logger
 
 from .config import load_config
-from .evaluator import Evaluator
+from .evaluator import Evaluator, EvaluationConfig
 from .poidh.client import PoidhClient
 from .runner import BotRunner, RunnerConfig
 from .state import MemoryStateStore
@@ -15,7 +15,7 @@ def main() -> None:
     wallet = init_wallet(config)
     runner_config = RunnerConfig(poll_interval_seconds=60, bounty_reward_wei=0)
     poidh = PoidhClient(wallet=wallet, config=config)
-    evaluator = Evaluator()
+    evaluator = Evaluator(EvaluationConfig(ai_endpoint=config.ai_score_endpoint))
     state = MemoryStateStore()
 
     runner = BotRunner(

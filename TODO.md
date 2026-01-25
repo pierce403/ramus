@@ -10,7 +10,7 @@
 - [x] Review POIDH API/docs: bounty creation, submissions, judging, payouts, and any required attestations.
 - [x] Choose and initialize the bot wallet; confirm chain/network and funding flow.
 - [x] Build bot core loop: create bounty -> wait -> evaluate -> select -> pay.
-- [ ] Implement deterministic selection rubric with an optional AI assist (documented).
+- [x] Implement deterministic selection rubric with an optional AI assist (documented).
 - [ ] Add submission verification helpers (image/video checks, metadata capture, integrity checks).
 - [ ] Store state (bounty IDs, submissions, decisions, payouts) in a durable store.
 - [ ] Add audit log + reasoning report for each bounty run.

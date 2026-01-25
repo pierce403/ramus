@@ -17,6 +17,7 @@ class BotConfig:
     xmtp_db_path: str
     state_db_path: str
     log_level: str
+    ai_score_endpoint: str | None
 
 
 class ConfigError(RuntimeError):
@@ -43,4 +44,5 @@ def load_config() -> BotConfig:
         xmtp_db_path=os.getenv("XMTP_DB_PATH", "./.xmtp"),
         state_db_path=os.getenv("STATE_DB_PATH", "./state/ramus.sqlite"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
+        ai_score_endpoint=os.getenv("AI_SCORE_ENDPOINT"),
     )
