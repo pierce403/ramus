@@ -1,0 +1,29 @@
+[project]
+name = "ramus-bot"
+version = "0.1.0"
+description = "Ramus: autonomous POIDH bounty runner using XMTP"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Ramus Contributors" }]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
