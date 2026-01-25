@@ -5,6 +5,7 @@ import os
 from dataclasses import replace
 from pathlib import Path
 
+import httpx
 from loguru import logger
 from web3 import Web3
 from xmtp.types import ClientOptions
@@ -47,6 +48,7 @@ class XmtpBot:
             setup_notice = self._setup_notice(ctx)
             if setup_notice:
                 response = f"{setup_notice}\n\n{response}"
+            response = await self._apply_persona(response)
             await ctx.send_text(response)
 
         logger.info("Starting XMTP agent")
@@ -195,6 +197,52 @@ class XmtpBot:
             return f"VENICE_MODEL saved to {env_path}. Restart the bot to apply."
 
         return None
+
+    async def _apply_persona(self, response: str) -> str:
+        if not self.config.venice_api_key:
+            return response
+
+        prompt = (
+            "You are Ramus, an ancient tree spirit. "
+            "Write a 1-2 sentence preface in Ramus's voice. "
+            "Then include the RESPONSE verbatim on the next line. "
+            "Do not alter RESPONSE, do not add extra code fences.\n\n"
+            f"RESPONSE:\n{response}"
+        )
+        payload = {
+            "model": self.config.venice_model,
+            "messages": [
+                {"role": "system", "content": "Respond as Ramus, then echo RESPONSE verbatim."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.4,
+            "max_tokens": 300,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.config.venice_api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    f"{self.config.venice_base_url.rstrip('/')}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                content = (
+                    data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                )
+                if response in content:
+                    return content.strip()
+        except Exception as exc:
+            logger.warning("Persona response failed: {}", exc)
+
+        preface = "I am Ramus, elder of the green. Hear these roots' counsel:"
+        return f"{preface}\n{response}"
 
     async def _handle_command(self, ctx, command: Command) -> str:
         if command.action.startswith("admin."):
