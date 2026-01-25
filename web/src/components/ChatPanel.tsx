@@ -7,10 +7,12 @@ import {
   type Conversation,
   type Signer,
 } from "@xmtp/browser-sdk";
-import { BrowserProvider, getBytes } from "ethers";
+import { BrowserProvider, getBytes, type Eip1193Provider } from "ethers";
 
 const BOT_ADDRESS = import.meta.env.VITE_XMTP_BOT_ADDRESS as string | undefined;
-const XMTP_ENV = (import.meta.env.VITE_XMTP_ENV as string | undefined) ?? "production";
+const RAW_ENV = import.meta.env.VITE_XMTP_ENV as string | undefined;
+const XMTP_ENV =
+  RAW_ENV === "production" || RAW_ENV === "dev" || RAW_ENV === "local" ? RAW_ENV : "production";
 
 const ENCRYPTION_KEY_STORAGE = "ramus_xmtp_key";
 
@@ -20,7 +22,9 @@ function getOrCreateEncryptionKey(): Uint8Array {
     return getBytes(stored);
   }
   const key = crypto.getRandomValues(new Uint8Array(32));
-  const keyHex = `0x${Array.from(key).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+  const keyHex = `0x${Array.from(key)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")}`;
   localStorage.setItem(ENCRYPTION_KEY_STORAGE, keyHex);
   return key;
 }
@@ -29,7 +33,7 @@ async function createSigner(): Promise<Signer> {
   if (!window.ethereum) {
     throw new Error("No injected wallet found.");
   }
-  const provider = new BrowserProvider(window.ethereum);
+  const provider = new BrowserProvider(window.ethereum as Eip1193Provider);
   await provider.send("eth_requestAccounts", []);
   const signer = await provider.getSigner();
   const address = (await signer.getAddress()).toLowerCase();
@@ -65,8 +69,8 @@ export default function ChatPanel() {
       identifierKind: IdentifierKind.Ethereum,
     });
     const consent = await dm.consentState();
-    if (consent !== ConsentState.ALLOWED) {
-      await dm.updateConsentState(ConsentState.ALLOWED);
+    if (consent !== ConsentState.Allowed) {
+      await dm.updateConsentState(ConsentState.Allowed);
     }
     const history = await dm.messages();
     setMessages(history);
@@ -85,7 +89,7 @@ export default function ChatPanel() {
 
   useEffect(() => {
     let isMounted = true;
-    let stream: { return: (value?: DecodedMessage) => Promise<unknown> } | null = null;
+    let stream: AsyncIterable<DecodedMessage> | null = null;
 
     const startStream = async () => {
       if (!conversation) {
@@ -100,12 +104,12 @@ export default function ChatPanel() {
       }
     };
 
-    startStream();
+    void startStream();
 
     return () => {
       isMounted = false;
-      if (stream) {
-        void stream.return();
+      if (stream && "return" in stream) {
+        void (stream as AsyncIterator<DecodedMessage>).return?.();
       }
     };
   }, [conversation]);
@@ -125,7 +129,7 @@ export default function ChatPanel() {
           <div className="chat__body">
             <div className="chat__messages">
               {messages.map((message) => (
-                <div key={message.id} className="chat__message">
+                <div key={String(message.id)} className="chat__message">
                   <span>{String(message.content)}</span>
                 </div>
               ))}
