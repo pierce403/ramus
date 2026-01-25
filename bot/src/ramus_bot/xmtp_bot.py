@@ -22,6 +22,7 @@ class XmtpBot:
 
     async def start(self) -> None:
         user = create_user(self._xmtp_key())
+        logger.info("XMTP bot address: {}", user.address)
         signer = create_signer(user)
         agent = await Agent.create(
             signer,

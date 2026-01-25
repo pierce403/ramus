@@ -52,7 +52,7 @@ run_bot() {
   log "Starting Ramus bot"
   # shellcheck disable=SC1090
   source "$VENV_DIR/bin/activate"
-  python -m ramus_bot
+  PYTHONPATH="$BOT_DIR/src" python -m ramus_bot
 }
 
 main() {
