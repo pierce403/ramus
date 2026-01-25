@@ -20,7 +20,7 @@ Ramus expects either plain text commands (`status`, `help`) or JSON:
 - `XMTP_WALLET_KEY` (optional; must match `WALLET_PRIVATE_KEY`)
 - `OPERATOR_ENS` (defaults to `deanpierce.eth`)
 - `OPERATOR_ADDRESS` (optional override for the operator address)
-- `ETH_MAINNET_RPC_URL` (used for ENS resolution)
+- `ETH_MAINNET_RPC_URL` (used for ENS resolution; set `OPERATOR_ADDRESS` if ENS is unavailable)
 
 ## Admin commands (operator only)
 
