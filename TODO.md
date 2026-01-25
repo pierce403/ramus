@@ -34,6 +34,6 @@
 - [ ] Document the full run in README + `docs/`.
 
 ## README and open source requirements
-- [ ] Write clear setup instructions (env, wallets, XMTP, POIDH).
-- [ ] Document architecture, selection logic, and safety assumptions.
-- [ ] Add license + contribution notes (if needed).
+- [x] Write clear setup instructions (env, wallets, XMTP, POIDH).
+- [x] Document architecture, selection logic, and safety assumptions.
+- [x] Add license + contribution notes (if needed).
