@@ -123,9 +123,9 @@ class XmtpBot:
                     logger.warning("ENS resolver initialization failed: {}", exc)
                     ens = None
             if ens is None:
-                logger.warning("ENS resolver unavailable in web3.")
-                return None
-            address = ens.address(self.config.operator_ens)
+                address = self._resolve_ens_via_registry(w3, self.config.operator_ens)
+            else:
+                address = ens.address(self.config.operator_ens)
             if not address:
                 logger.warning("Failed to resolve operator ENS: {}", self.config.operator_ens)
                 return None
@@ -135,6 +135,77 @@ class XmtpBot:
         except Exception as exc:
             logger.warning("ENS resolution failed: {}", exc)
             return None
+
+    def _resolve_ens_via_registry(self, w3: Web3, name: str) -> str | None:
+        registry = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
+        registry_abi = [
+            {
+                "inputs": [{"internalType": "bytes32", "name": "node", "type": "bytes32"}],
+                "name": "resolver",
+                "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+                "stateMutability": "view",
+                "type": "function",
+            }
+        ]
+        resolver_abi = [
+            {
+                "inputs": [{"internalType": "bytes32", "name": "node", "type": "bytes32"}],
+                "name": "addr",
+                "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+                "stateMutability": "view",
+                "type": "function",
+            },
+            {
+                "inputs": [
+                    {"internalType": "bytes32", "name": "node", "type": "bytes32"},
+                    {"internalType": "uint256", "name": "coinType", "type": "uint256"},
+                ],
+                "name": "addr",
+                "outputs": [{"internalType": "bytes", "name": "", "type": "bytes"}],
+                "stateMutability": "view",
+                "type": "function",
+            },
+        ]
+        node = self._namehash(name)
+        if not node:
+            return None
+        registry_contract = w3.eth.contract(
+            address=Web3.to_checksum_address(registry),
+            abi=registry_abi,
+        )
+        try:
+            resolver_address = registry_contract.functions.resolver(node).call()
+        except Exception as exc:
+            logger.warning("ENS registry lookup failed: {}", exc)
+            return None
+        if not resolver_address or int(resolver_address, 16) == 0:
+            return None
+        resolver_contract = w3.eth.contract(
+            address=Web3.to_checksum_address(resolver_address),
+            abi=resolver_abi,
+        )
+        try:
+            resolved = resolver_contract.functions.addr(node).call()
+            if resolved and int(resolved, 16) != 0:
+                return resolved
+        except Exception:
+            pass
+        try:
+            resolved_bytes = resolver_contract.functions.addr(node, 60).call()
+            if isinstance(resolved_bytes, (bytes, bytearray)) and len(resolved_bytes) == 20:
+                return Web3.to_checksum_address(f"0x{resolved_bytes.hex()}")
+        except Exception:
+            return None
+        return None
+
+    def _namehash(self, name: str) -> bytes:
+        node = b"\x00" * 32
+        if not name:
+            return node
+        labels = [label for label in name.strip(".").split(".") if label]
+        for label in reversed(labels):
+            node = Web3.keccak(node + Web3.keccak(text=label))
+        return node
 
     def _coerce_address(self, value: Any) -> str | None:
         if value is None:
@@ -176,6 +247,15 @@ class XmtpBot:
                 "from_address",
                 "fromAddress",
                 "address",
+                "address_bytes",
+                "wallet_address",
+                "walletAddress",
+                "identifier",
+                "identifierAddress",
+                "identifier_address",
+                "account",
+                "accountAddress",
+                "account_address",
                 "peer_address",
                 "peerAddress",
                 "sender",
@@ -199,6 +279,12 @@ class XmtpBot:
             "address_bytes",
             "wallet_address",
             "walletAddress",
+            "identifier",
+            "identifierAddress",
+            "identifier_address",
+            "account",
+            "accountAddress",
+            "account_address",
             "peer_address",
             "peerAddress",
             "sender",
