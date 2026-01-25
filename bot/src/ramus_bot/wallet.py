@@ -3,7 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
+
+try:
+    from web3.middleware import geth_poa_middleware
+except ImportError:  # pragma: no cover - depends on web3 version
+    try:
+        from web3.middleware.geth_poa import geth_poa_middleware
+    except ImportError:  # pragma: no cover - depends on web3 version
+        try:
+            from web3.middleware.poa import geth_poa_middleware
+        except ImportError:  # pragma: no cover - depends on web3 version
+            try:
+                from web3.middleware import ExtraDataToPOAMiddleware as geth_poa_middleware
+            except ImportError:  # pragma: no cover - depends on web3 version
+                geth_poa_middleware = None
 
 from .config import BotConfig
 
@@ -24,7 +37,8 @@ def init_wallet(config: BotConfig) -> BotWallet:
         raise WalletError("Failed to connect to RPC")
 
     # Some POIDH networks use PoA-style headers.
-    web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+    if geth_poa_middleware is not None:
+        web3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
     account = web3.eth.account.from_key(config.wallet_private_key)
     address = Web3.to_checksum_address(account.address)
