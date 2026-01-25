@@ -22,7 +22,7 @@
 - [ ] Set up the XMTP browser SDK in the web app for user chat.
 
 ## Web app (ramus.ai)
-- [ ] Scaffold TypeScript + React app.
+- [x] Scaffold TypeScript + React app.
 - [ ] Design the Ramus persona voice and message templates.
 - [ ] Build pages: Home, How it Works, Live Bounties, Submit Proof, Bot Chat.
 - [ ] Add XMTP-based chat UI to talk to the bot.
