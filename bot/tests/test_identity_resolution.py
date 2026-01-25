@@ -109,3 +109,4 @@ def test_xmtp_inbox_for_deanpierce() -> None:
     address = _resolve_deanpierce_address()
     inbox_id = asyncio.run(_resolve_inbox_id(address))
     assert inbox_id is not None
+    print(f"deanpierce.eth inbox id: {inbox_id}")
