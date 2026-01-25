@@ -3,7 +3,6 @@ import {
   Client,
   ConsentState,
   DecodedMessage,
-  IdentifierKind,
   type Conversation,
   type Signer,
 } from "@xmtp/browser-sdk";
@@ -39,7 +38,7 @@ async function createSigner(): Promise<Signer> {
   const address = (await signer.getAddress()).toLowerCase();
   return {
     type: "EOA",
-    getIdentifier: () => ({ identifier: address, identifierKind: IdentifierKind.Ethereum }),
+    getIdentifier: () => ({ identifier: address, identifierKind: "Ethereum" }),
     signMessage: async (message: string) => {
       const signature = await signer.signMessage(message);
       return getBytes(signature);
@@ -66,7 +65,7 @@ export default function ChatPanel() {
     const newClient = await Client.create(signer, key, { env: XMTP_ENV });
     const dm = await newClient.conversations.newDmWithIdentifier({
       identifier: BOT_ADDRESS.toLowerCase(),
-      identifierKind: IdentifierKind.Ethereum,
+      identifierKind: "Ethereum",
     });
     const consent = await dm.consentState();
     if (consent !== ConsentState.Allowed) {

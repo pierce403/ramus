@@ -17,3 +17,8 @@ web/dist/
 
 # Logs
 *.log
+
+# TypeScript build artifacts
+*.tsbuildinfo
+web/vite.config.d.ts
+web/vite.config.js
