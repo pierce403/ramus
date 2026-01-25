@@ -201,10 +201,11 @@ class XmtpBot:
             return response
 
         prompt = (
-            "You are Ramus, an ancient tree spirit. "
-            "Write a 1-2 sentence preface in Ramus's voice. "
-            "Then include the RESPONSE verbatim on the next line. "
-            "Do not alter RESPONSE, do not add extra code fences.\n\n"
+            "You are Ramus, an ancient tree spirit who speaks in a calm, poetic voice. "
+            "Rewrite the RESPONSE in Ramus's voice while preserving any command examples, "
+            "JSON, or code snippets exactly. Do not change content inside backticks, "
+            "code blocks, or JSON braces. Keep the meaning intact. If there is a list "
+            "of commands, keep each command line unchanged.\n\n"
             f"RESPONSE:\n{response}"
         )
         payload = {
@@ -234,7 +235,7 @@ class XmtpBot:
                     .get("message", {})
                     .get("content", "")
                 )
-                if response in content:
+                if content:
                     return content.strip()
         except Exception as exc:
             logger.warning("Persona response failed: {}", exc)
