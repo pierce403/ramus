@@ -12,6 +12,44 @@ log() {
   echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*"
 }
 
+load_env() {
+  local env_file=""
+  if [[ -n "${RAMUS_ENV_FILE:-}" ]]; then
+    env_file="$RAMUS_ENV_FILE"
+  else
+    if [[ -f "$ROOT_DIR/.env" ]]; then
+      env_file="$ROOT_DIR/.env"
+    elif [[ -f "$BOT_DIR/.env" ]]; then
+      env_file="$BOT_DIR/.env"
+    fi
+  fi
+
+  if [[ -n "$env_file" ]]; then
+    log "Loading env from $env_file"
+    set -a
+    # shellcheck disable=SC1090
+    source "$env_file"
+    set +a
+  fi
+}
+
+validate_env() {
+  local missing=()
+  local required_vars=(POIDH_RPC_URL WALLET_PRIVATE_KEY)
+  for var in "${required_vars[@]}"; do
+    if [[ -z "${!var:-}" ]]; then
+      missing+=("$var")
+    fi
+  done
+
+  if (( ${#missing[@]} )); then
+    log "ERROR: Missing required env vars: ${missing[*]}"
+    return 1
+  fi
+
+  return 0
+}
+
 ensure_repo() {
   if [[ ! -d "$ROOT_DIR/.git" ]]; then
     log "ERROR: Not a git repo: $ROOT_DIR"
@@ -61,6 +99,13 @@ main() {
   install_deps
 
   while true; do
+    load_env
+    if ! validate_env; then
+      log "Bot not started; retrying in ${CHECK_INTERVAL_SECONDS}s"
+      sleep "$CHECK_INTERVAL_SECONDS"
+      continue
+    fi
+
     run_bot &
     BOT_PID=$!
     log "Bot PID: $BOT_PID"
@@ -70,7 +115,7 @@ main() {
       if pull_latest; then
         log "Repo updated; restarting bot"
         install_deps
-        kill "$BOT_PID" || true
+        kill "$BOT_PID" 2>/dev/null || true
         wait "$BOT_PID" || true
         break
       fi
