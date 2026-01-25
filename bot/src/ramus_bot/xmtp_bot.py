@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -140,8 +141,11 @@ class XmtpBot:
             return None
         if isinstance(value, str):
             return value
-        if isinstance(value, bytes):
-            return f"0x{value.hex()}"
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            data = bytes(value)
+            if len(data) == 20:
+                return Web3.to_checksum_address(f"0x{data.hex()}")
+            return f"0x{data.hex()}"
         if hasattr(value, "hex") and callable(value.hex):
             try:
                 hex_value = value.hex()
@@ -192,6 +196,9 @@ class XmtpBot:
             "from_address",
             "fromAddress",
             "address",
+            "address_bytes",
+            "wallet_address",
+            "walletAddress",
             "peer_address",
             "peerAddress",
             "sender",
@@ -204,6 +211,13 @@ class XmtpBot:
             nested = self._extract_address(value)
             if nested:
                 return nested
+        try:
+            text = str(obj)
+        except Exception:
+            return None
+        match = re.search(r"0x[a-fA-F0-9]{40}", text)
+        if match:
+            return match.group(0)
         return None
 
     def _sender_address(self, ctx) -> str | None:
