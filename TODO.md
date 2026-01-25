@@ -7,7 +7,7 @@
 - [x] Create a `docs/` area for POIDH/XMTP notes and decisions.
 
 ## POIDH bounty runner (Python bot)
-- [ ] Review POIDH API/docs: bounty creation, submissions, judging, payouts, and any required attestations.
+- [x] Review POIDH API/docs: bounty creation, submissions, judging, payouts, and any required attestations.
 - [ ] Choose and initialize the bot wallet; confirm chain/network and funding flow.
 - [ ] Build bot core loop: create bounty -> wait -> evaluate -> select -> pay.
 - [ ] Implement deterministic selection rubric with an optional AI assist (documented).
