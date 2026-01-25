@@ -89,7 +89,7 @@ export default function ChatPanel() {
 
   useEffect(() => {
     let isMounted = true;
-    let stopStream: (() => Promise<unknown>) | undefined;
+    let stopStream: ((value?: DecodedMessage) => Promise<unknown>) | undefined;
 
     const startStream = async () => {
       if (!conversation) {
