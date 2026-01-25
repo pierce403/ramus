@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import os
-import tempfile
-from typing import Any
 
 import pytest
-from eth_account import Account
 from web3 import Web3
 
 from ramus_bot.ens_utils import resolve_ens_via_registry
@@ -32,68 +28,30 @@ def _resolve_deanpierce_address() -> str:
     return address
 
 
-def _identifier_kind() -> Any:
-    try:
-        from xmtp.types import IdentifierKind
-    except Exception:
-        return "Ethereum"
-    for attr in ("Ethereum", "ETHEREUM", "ethereum"):
-        if hasattr(IdentifierKind, attr):
-            return getattr(IdentifierKind, attr)
-    return "Ethereum"
-
-
 async def _resolve_inbox_id(address: str) -> str | None:
     try:
-        from xmtp_agent import Agent
-        from xmtp_agent.user import create_signer, create_user
+        import xmtp_bindings.xmtpv3 as xv3
         from xmtp.types import ClientOptions
     except Exception as exc:
-        pytest.skip(f"XMTP dependencies unavailable: {exc}")
+        pytest.skip(f"XMTP bindings unavailable: {exc}")
 
-    account = Account.create()
-    wallet_key = account.key.hex()
-    if not wallet_key.startswith("0x"):
-        wallet_key = f"0x{wallet_key}"
-    user = create_user(wallet_key)
-    signer = create_signer(user)
-    with tempfile.TemporaryDirectory() as temp_dir:
-        agent = await Agent.create(
-            signer,
-            ClientOptions(
-                env=os.getenv("XMTP_ENV", "production"),
-                db_path=temp_dir,
-                disable_history_sync=True,
-            ),
-        )
-        client = getattr(agent, "client", None) or getattr(agent, "_client", None)
-        if client is None:
-            pytest.skip("XMTP client not available on Agent.")
-
-        kind = _identifier_kind()
-        method_names = ("get_inbox_id_by_identifier", "getInboxIdByIdentifier")
-        for method_name in method_names:
-            method = getattr(client, method_name, None)
-            if not method:
-                continue
-            call_variants = [
-                ((), {"identifier": address, "identifierKind": kind}),
-                ((), {"identifier": address, "identifier_kind": kind}),
-                ((address, kind), {}),
-                ((address,), {"identifier_kind": kind}),
-            ]
-            for args, kwargs in call_variants:
-                try:
-                    result = method(*args, **kwargs)
-                except TypeError:
-                    continue
-                if inspect.isawaitable(result):
-                    result = await result
-                if result:
-                    return str(result)
-        pytest.skip("No inbox id lookup method found on XMTP client.")
-
-    return None
+    opts = ClientOptions(env=os.getenv("XMTP_ENV", "production"))
+    host = opts.resolved_api_url()
+    api = await xv3.connect_to_backend(
+        host,
+        opts.gateway_host,
+        host.startswith("https"),
+        None,
+        opts.app_version,
+        None,
+        None,
+    )
+    ffi_identifier = xv3.FfiIdentifier(
+        identifier=address,
+        identifier_kind=xv3.FfiIdentifierKind.ETHEREUM,
+    )
+    inbox_id = await xv3.get_inbox_id_for_identifier(api, ffi_identifier)
+    return str(inbox_id) if inbox_id else None
 
 
 @pytest.mark.integration
