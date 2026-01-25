@@ -92,17 +92,19 @@ class XmtpBot:
     def _log_incoming_message(self, ctx) -> None:
         sender = self._sender_address(ctx) or "unknown"
         message = getattr(ctx, "message", None)
-        message_id = getattr(message, "id", None)
+        message_id = self._format_message_id(getattr(message, "id", None))
         content = getattr(message, "content", "")
         content_str = str(content)
         preview = content_str.replace("\n", " ").strip()
         if len(preview) > 200:
             preview = f"{preview[:197]}..."
+        message_type = type(message).__name__ if message is not None else "unknown"
         details = self._message_debug_fields(ctx)
         logger.info(
-            "XMTP inbound message sender={} id={} preview={}",
+            "XMTP inbound message sender={} id={} type={} preview={}",
             sender,
             message_id,
+            message_type,
             preview,
         )
         if sender == "unknown":
@@ -119,32 +121,63 @@ class XmtpBot:
         ):
             if not obj:
                 continue
-            for attr in (
-                "sender_address",
-                "senderAddress",
-                "from_address",
-                "fromAddress",
-                "address",
-                "address_bytes",
-                "wallet_address",
-                "walletAddress",
-                "identifier",
-                "identifierAddress",
-                "identifier_address",
-                "account",
-                "accountAddress",
-                "account_address",
-                "peer_address",
-                "peerAddress",
-                "sender",
-                "from",
-                "topic",
-                "id",
-            ):
-                if hasattr(obj, attr):
-                    value = getattr(obj, attr, None)
-                    fields[f"{label}.{attr}"] = self._safe_repr(value)
+            fields[f"{label}.__type__"] = type(obj).__name__
+            for attr in self._candidate_field_names(obj):
+                value = getattr(obj, attr, None)
+                fields[f"{label}.{attr}"] = self._safe_repr(value)
         return fields
+
+    def _candidate_field_names(self, obj: Any) -> list[str]:
+        base = [
+            "sender_address",
+            "senderAddress",
+            "sender_inbox_id",
+            "senderInboxId",
+            "sender_inbox_id_bytes",
+            "senderInboxIdBytes",
+            "from_address",
+            "fromAddress",
+            "address",
+            "address_bytes",
+            "wallet_address",
+            "walletAddress",
+            "identifier",
+            "identifierAddress",
+            "identifier_address",
+            "account",
+            "accountAddress",
+            "account_address",
+            "peer_address",
+            "peerAddress",
+            "sender",
+            "from",
+            "topic",
+            "id",
+        ]
+        dynamic: list[str] = []
+        try:
+            for name in dir(obj):
+                if name.startswith("__"):
+                    continue
+                lowered = name.lower()
+                if any(token in lowered for token in ("sender", "from", "address", "peer", "inbox", "identifier", "account")):
+                    dynamic.append(name)
+        except Exception:
+            pass
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for name in base + dynamic:
+            if name in seen:
+                continue
+            if hasattr(obj, name):
+                seen.add(name)
+                ordered.append(name)
+        return ordered
+
+    def _format_message_id(self, message_id: Any) -> str:
+        if isinstance(message_id, (bytes, bytearray, memoryview)):
+            return f"0x{bytes(message_id).hex()}"
+        return self._safe_repr(message_id)
 
     def _safe_repr(self, value: Any) -> str:
         try:
@@ -207,7 +240,7 @@ class XmtpBot:
             logger.info("Resolved operator ENS {} to {}", self.config.operator_ens, self._operator_address)
             return self._operator_address
         except Exception as exc:
-            logger.warning("ENS resolution failed: {}", exc)
+            logger.warning("ENS resolution failed: {} ({})", exc, type(exc).__name__)
             return None
 
     def _resolve_ens_via_registry(self, w3: Web3, name: str) -> str | None:
