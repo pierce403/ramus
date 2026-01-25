@@ -13,7 +13,7 @@
 - [x] Implement deterministic selection rubric with an optional AI assist (documented).
 - [x] Add submission verification helpers (image/video checks, metadata capture, integrity checks).
 - [x] Store state (bounty IDs, submissions, decisions, payouts) in a durable store.
-- [ ] Add audit log + reasoning report for each bounty run.
+- [x] Add audit log + reasoning report for each bounty run.
 - [ ] Add safety rails: timeouts, retry logic, dispute handling, and manual override hooks.
 
 ## XMTP integration

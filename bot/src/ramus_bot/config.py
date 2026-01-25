@@ -18,6 +18,7 @@ class BotConfig:
     state_db_path: str
     log_level: str
     ai_score_endpoint: str | None
+    audit_dir: str
 
 
 class ConfigError(RuntimeError):
@@ -45,4 +46,5 @@ def load_config() -> BotConfig:
         state_db_path=os.getenv("STATE_DB_PATH", "./state/ramus.sqlite"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         ai_score_endpoint=os.getenv("AI_SCORE_ENDPOINT"),
+        audit_dir=os.getenv("AUDIT_DIR", "./docs/bounty-runs"),
     )

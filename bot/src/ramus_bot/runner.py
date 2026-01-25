@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from loguru import logger
 
+from .audit import write_decision_report
 from .config import BotConfig
 from .evaluator import Evaluator
 from .models import BountySpec
@@ -55,6 +56,7 @@ class BotRunner:
 
         decision = self.evaluator.select_winner(active.bounty_id, claims)
         self.state.record_decision(decision)
+        write_decision_report(decision, claims, self.config.audit_dir)
 
         if decision.winner_claim_id is None:
             logger.info("No winner selected for bounty {}", active.bounty_id)
