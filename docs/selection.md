@@ -13,15 +13,15 @@ Each claim is scored on:
 
 The claim with the highest total score wins.
 
-## Optional AI assist
+## Optional AI assist (Venice)
 
-If `AI_SCORE_ENDPOINT` is set, the bot sends a JSON payload containing the claim title and description. The endpoint should respond with:
+If `VENICE_API_KEY` is set, the bot scores claims using Venice AI (chat completions) and expects a JSON response like:
 
 ```json
-{"score": 0.0}
+{"score": 0.0, "reason": "short reason"}
 ```
 
-The returned score (0-1) is combined with the deterministic score using a small weight. The AI score is reported in the reasoning output.
+The returned score (0-1) is combined with the deterministic score using a small weight. The AI score (and brief reason, when present) is reported in the reasoning output. `AI_SCORE_ENDPOINT` remains as a legacy override for custom scoring services.
 
 ## Transparency
 

@@ -17,7 +17,14 @@ def build_runner(config) -> BotRunner:
     wallet = init_wallet(config)
     runner_config = RunnerConfig(poll_interval_seconds=60, bounty_reward_wei=0)
     poidh = PoidhClient(wallet=wallet, config=config)
-    evaluator = Evaluator(EvaluationConfig(ai_endpoint=config.ai_score_endpoint))
+    evaluator = Evaluator(
+        EvaluationConfig(
+            ai_endpoint=config.ai_score_endpoint,
+            venice_api_key=config.venice_api_key,
+            venice_model=config.venice_model,
+            venice_base_url=config.venice_base_url,
+        )
+    )
     state = SQLiteStateStore(config.state_db_path)
     return BotRunner(
         config=config,

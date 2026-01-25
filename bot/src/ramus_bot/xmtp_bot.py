@@ -48,14 +48,14 @@ class XmtpBot:
         await agent.start()
 
     def _xmtp_key(self) -> str:
-        return self.config.xmtp_wallet_key or self.config.wallet_private_key
+        return self.config.wallet_private_key
 
     def _setup_notice(self, ctx) -> str | None:
         missing = []
         if not self.config.poidh_api_key:
             missing.append("POIDH_API_KEY (optional API access)")
-        if not self.config.ai_score_endpoint:
-            missing.append("AI_SCORE_ENDPOINT (optional AI scoring)")
+        if not self.config.venice_api_key:
+            missing.append("VENICE_API_KEY (optional AI scoring)")
 
         if not missing:
             return None

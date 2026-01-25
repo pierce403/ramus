@@ -17,7 +17,7 @@ Ramus expects either plain text commands (`status`, `help`) or JSON:
 
 - `XMTP_ENV` (production or dev)
 - `XMTP_DB_PATH`
-- `XMTP_WALLET_KEY`
+- `XMTP_WALLET_KEY` (optional; must match `WALLET_PRIVATE_KEY`)
 
 ## Browser SDK
 

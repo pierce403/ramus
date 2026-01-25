@@ -36,7 +36,7 @@ python -m ramus_bot
 
 ### Key env vars (bot)
 
-See `bot/.env.example` and `docs/secrets.md`.
+See `bot/.env.example` and `docs/secrets.md`. If `WALLET_PRIVATE_KEY` is blank, Ramus generates a key and stores it at `WALLET_KEY_PATH`. XMTP uses the same wallet key (if `XMTP_WALLET_KEY` is set, it must match). For AI scoring, set `VENICE_API_KEY`.
 
 ## Web setup
 
