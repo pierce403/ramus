@@ -4,7 +4,7 @@
 - [x] Decide repo layout (e.g., `bot/`, `web/`, `docs/`, `scripts/`).
 - [x] Add tooling for Python (lint/format/test) and TS/React (lint/test/build).
 - [x] Define secrets management + env var strategy for local + prod.
-- [ ] Create a `docs/` area for POIDH/XMTP notes and decisions.
+- [x] Create a `docs/` area for POIDH/XMTP notes and decisions.
 
 ## POIDH bounty runner (Python bot)
 - [ ] Review POIDH API/docs: bounty creation, submissions, judging, payouts, and any required attestations.
