@@ -3,7 +3,7 @@
 ## Project setup
 - [x] Decide repo layout (e.g., `bot/`, `web/`, `docs/`, `scripts/`).
 - [x] Add tooling for Python (lint/format/test) and TS/React (lint/test/build).
-- [ ] Define secrets management + env var strategy for local + prod.
+- [x] Define secrets management + env var strategy for local + prod.
 - [ ] Create a `docs/` area for POIDH/XMTP notes and decisions.
 
 ## POIDH bounty runner (Python bot)
