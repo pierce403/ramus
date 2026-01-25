@@ -13,6 +13,11 @@ from xmtp.types import ClientOptions
 from xmtp_agent import Agent
 from xmtp_agent.user import create_signer, create_user
 
+try:
+    from ens import ENS
+except ImportError:  # pragma: no cover - depends on optional ens extra
+    ENS = None
+
 from .config import BotConfig
 from .models import BountySpec
 from .poidh.client import PoidhClient
@@ -109,10 +114,17 @@ class XmtpBot:
             if not w3.is_connected():
                 logger.warning("Failed to connect to mainnet RPC for ENS resolution.")
                 return None
-            if not getattr(w3, "ens", None):
+            ens = getattr(w3, "ens", None)
+            if ens is None and ENS is not None:
+                try:
+                    ens = ENS.from_web3(w3)
+                except Exception as exc:
+                    logger.warning("ENS resolver initialization failed: {}", exc)
+                    ens = None
+            if ens is None:
                 logger.warning("ENS resolver unavailable in web3.")
                 return None
-            address = w3.ens.address(self.config.operator_ens)
+            address = ens.address(self.config.operator_ens)
             if not address:
                 logger.warning("Failed to resolve operator ENS: {}", self.config.operator_ens)
                 return None
@@ -123,11 +135,36 @@ class XmtpBot:
             logger.warning("ENS resolution failed: {}", exc)
             return None
 
+    def _coerce_address(self, value: Any) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        if isinstance(value, bytes):
+            return f"0x{value.hex()}"
+        if hasattr(value, "hex") and callable(value.hex):
+            try:
+                hex_value = value.hex()
+            except Exception:
+                hex_value = None
+            if isinstance(hex_value, str):
+                return hex_value if hex_value.startswith("0x") else f"0x{hex_value}"
+        try:
+            value_str = str(value)
+        except Exception:
+            return None
+        if value_str.startswith("0x") and len(value_str) >= 10:
+            return value_str
+        return None
+
     def _extract_address(self, obj: Any) -> str | None:
         if not obj:
             return None
         if isinstance(obj, str):
             return obj
+        coerced = self._coerce_address(obj)
+        if coerced:
+            return coerced
         if isinstance(obj, dict):
             for key in (
                 "sender_address",
@@ -142,8 +179,9 @@ class XmtpBot:
             ):
                 if key in obj:
                     value = obj.get(key)
-                    if isinstance(value, str):
-                        return value
+                    coerced = self._coerce_address(value)
+                    if coerced:
+                        return coerced
                     nested = self._extract_address(value)
                     if nested:
                         return nested
@@ -160,8 +198,9 @@ class XmtpBot:
             "from",
         ):
             value = getattr(obj, attr, None)
-            if isinstance(value, str):
-                return value
+            coerced = self._coerce_address(value)
+            if coerced:
+                return coerced
             nested = self._extract_address(value)
             if nested:
                 return nested

@@ -34,7 +34,8 @@ Planned layout (update as it becomes real):
 
 ## Known Issues & Solutions
 
-- None yet. Add problems encountered and fixes here.
+- ENS resolution can fail if `web3` doesn't auto-load the ENS helper. Use `ENS.from_web3` when `w3.ens` is missing. Updated in `bot/src/ramus_bot/xmtp_bot.py`.
+- XMTP sender addresses may arrive as non-string types; coerce to string/hex before comparison in `bot/src/ramus_bot/xmtp_bot.py`.
 
 ## Dependencies
 
