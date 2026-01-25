@@ -17,8 +17,8 @@
 - [x] Add safety rails: timeouts, retry logic, dispute handling, and manual override hooks.
 
 ## XMTP integration
-- [ ] Implement XMTP messaging in the Python bot (inbox, outbound status updates).
-- [ ] Define a message protocol between web UI and bot (commands, status, errors).
+- [x] Implement XMTP messaging in the Python bot (inbox, outbound status updates).
+- [x] Define a message protocol between web UI and bot (commands, status, errors).
 - [ ] Set up the XMTP browser SDK in the web app for user chat.
 
 ## Web app (ramus.ai)

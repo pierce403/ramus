@@ -15,6 +15,7 @@ class BotConfig:
     wallet_address: str | None
     xmtp_env: str
     xmtp_db_path: str
+    xmtp_wallet_key: str | None
     state_db_path: str
     log_level: str
     ai_score_endpoint: str | None
@@ -44,6 +45,7 @@ def load_config() -> BotConfig:
         wallet_address=os.getenv("WALLET_ADDRESS"),
         xmtp_env=os.getenv("XMTP_ENV", "production"),
         xmtp_db_path=os.getenv("XMTP_DB_PATH", "./.xmtp"),
+        xmtp_wallet_key=os.getenv("XMTP_WALLET_KEY"),
         state_db_path=os.getenv("STATE_DB_PATH", "./state/ramus.sqlite"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         ai_score_endpoint=os.getenv("AI_SCORE_ENDPOINT"),
