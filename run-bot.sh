@@ -74,11 +74,29 @@ ensure_single_instance() {
       if [[ "$existing_pid" =~ ^[0-9]+$ ]] && kill -0 "$existing_pid" 2>/dev/null; then
         log "Stopping existing supervisor PID $existing_pid"
         kill "$existing_pid" 2>/dev/null || true
-        sleep 2
+        for _ in {1..5}; do
+          sleep 1
+          if flock -n "$LOCK_FD"; then
+            break
+          fi
+        done
       fi
       if ! flock -n "$LOCK_FD"; then
-        log "ERROR: Another supervisor is running; exiting."
-        exit 1
+        local supervisors=()
+        if command -v pgrep >/dev/null 2>&1; then
+          mapfile -t supervisors < <(pgrep -f "$ROOT_DIR/run-bot.sh" || true)
+        fi
+        for pid in "${supervisors[@]}"; do
+          if [[ "$pid" =~ ^[0-9]+$ ]] && [[ "$pid" != "$$" ]]; then
+            log "Stopping supervisor PID $pid"
+            kill "$pid" 2>/dev/null || true
+          fi
+        done
+        sleep 2
+        if ! flock -n "$LOCK_FD"; then
+          log "ERROR: Another supervisor is running; exiting."
+          exit 1
+        fi
       fi
     fi
     echo "$$" >"$LOCK_FILE"
@@ -97,6 +115,8 @@ ensure_single_instance() {
 
   # Stop any stray bot processes from previous runs.
   cleanup_stray_bots ""
+
+  trap 'cleanup_on_exit' EXIT INT TERM
 }
 
 cleanup_stray_bots() {
@@ -116,6 +136,12 @@ cleanup_stray_bots() {
       fi
     fi
   done
+}
+
+cleanup_on_exit() {
+  if [[ -n "$BOT_PID_FILE" && -f "$BOT_PID_FILE" ]]; then
+    rm -f "$BOT_PID_FILE"
+  fi
 }
 
 ensure_venv() {
