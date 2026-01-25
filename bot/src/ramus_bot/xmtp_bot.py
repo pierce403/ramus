@@ -59,8 +59,6 @@ class XmtpBot:
 
     def _setup_notice(self, ctx) -> str | None:
         missing = []
-        if not self.config.poidh_api_key:
-            missing.append("POIDH_API_KEY (optional API access)")
         if not self.config.venice_api_key:
             missing.append("VENICE_API_KEY (optional AI scoring)")
 
