@@ -1,16 +1,298 @@
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Space+Grotesk:wght@400;500;600&display=swap");
+
 :root {
   color-scheme: light;
-  font-family: "Georgia", serif;
-  line-height: 1.5;
+  font-family: "Space Grotesk", sans-serif;
+  background: #0c0f0b;
+  color: #f3f1e7;
+  --earth: #2b2d24;
+  --moss: #6c8f3a;
+  --leaf: #b9d16b;
+  --sun: #f4d77d;
+  --stone: #c9c4b6;
+  --mist: #e8e4d8;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  padding: 2rem;
-  background: #f4f1e8;
-  color: #2b241b;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, rgba(111, 152, 91, 0.35), transparent 60%),
+    radial-gradient(circle at 20% 40%, rgba(244, 215, 125, 0.15), transparent 55%),
+    #0b0d09;
+  color: var(--mist);
+}
+
+.app {
+  position: relative;
+  overflow: hidden;
+}
+
+.app::before,
+.app::after {
+  content: "";
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(111, 152, 91, 0.4), transparent 70%);
+  filter: blur(10px);
+  z-index: 0;
+}
+
+.app::before {
+  top: -120px;
+  right: -140px;
+}
+
+.app::after {
+  bottom: -200px;
+  left: -160px;
+  background: radial-gradient(circle, rgba(244, 215, 125, 0.25), transparent 70%);
+}
+
+main,
+header,
+footer {
+  position: relative;
+  z-index: 1;
+}
+
+.hero {
+  padding: 2.5rem 6vw 5rem;
+}
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 4rem;
+}
+
+.logo {
+  font-family: "Cinzel", serif;
+  letter-spacing: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.nav__links {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.nav__links a {
+  color: var(--mist);
+  text-decoration: none;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1rem;
+}
+
+.hero__content {
+  display: grid;
+  gap: 3rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: center;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--leaf);
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Cinzel", serif;
+  margin: 0 0 1rem;
+  color: var(--mist);
 }
 
 h1 {
-  margin-top: 0;
+  font-size: clamp(2.6rem, 5vw, 4.5rem);
+}
+
+.lead {
+  font-size: 1.1rem;
+  max-width: 540px;
+}
+
+.invocation {
+  font-style: italic;
+  color: var(--sun);
+}
+
+.hero__actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+.button {
+  border: none;
+  padding: 0.85rem 1.6rem;
+  border-radius: 999px;
+  background: linear-gradient(120deg, var(--leaf), var(--sun));
+  color: #1b1e16;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.button--ghost {
+  background: transparent;
+  color: var(--mist);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.hero__card {
+  padding: 2rem;
+  border-radius: 1.5rem;
+  background: rgba(29, 34, 23, 0.7);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sigil {
+  font-size: 2.5rem;
+  color: var(--leaf);
+  margin-top: 1.5rem;
+}
+
+.section {
+  padding: 4rem 6vw;
+}
+
+.section__header {
+  margin-bottom: 2rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.grid--tight {
+  gap: 1rem;
+}
+
+.card {
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: rgba(20, 24, 16, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.card--glow {
+  background: rgba(33, 44, 24, 0.8);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 10px 30px rgba(96, 135, 70, 0.2);
+}
+
+.tag {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(244, 215, 125, 0.15);
+  color: var(--sun);
+  font-size: 0.75rem;
+}
+
+.rules {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.rules li {
+  padding: 1rem 1.2rem;
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.chat {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.chat__panel {
+  padding: 1.5rem;
+  border-radius: 1.2rem;
+  background: rgba(16, 18, 12, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chat__body {
+  display: grid;
+  gap: 1rem;
+}
+
+.chat__messages {
+  min-height: 180px;
+  max-height: 280px;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.chat__message {
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 0.8rem;
+}
+
+.chat__input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chat__input input {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.6rem 1rem;
+  background: transparent;
+  color: var(--mist);
+}
+
+.footer {
+  padding: 2rem 6vw 3rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.footer__links {
+  display: flex;
+  gap: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+@media (max-width: 720px) {
+  .nav__links {
+    gap: 0.75rem;
+  }
+  .hero {
+    padding: 2rem 5vw 4rem;
+  }
+  .section {
+    padding: 3rem 5vw;
+  }
+  .chat__input {
+    flex-direction: column;
+  }
 }

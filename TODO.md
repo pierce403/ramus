@@ -24,7 +24,7 @@
 ## Web app (ramus.ai)
 - [x] Scaffold TypeScript + React app.
 - [x] Design the Ramus persona voice and message templates.
-- [ ] Build pages: Home, How it Works, Live Bounties, Submit Proof, Bot Chat.
+- [x] Build pages: Home, How it Works, Live Bounties, Submit Proof, Bot Chat.
 - [ ] Add XMTP-based chat UI to talk to the bot.
 - [ ] Provide bounty guidelines + proof requirements.
 
