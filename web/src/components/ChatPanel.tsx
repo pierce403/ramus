@@ -89,14 +89,15 @@ export default function ChatPanel() {
 
   useEffect(() => {
     let isMounted = true;
-    let stream: AsyncIterable<DecodedMessage> | null = null;
+    let stopStream: (() => Promise<unknown>) | undefined;
 
     const startStream = async () => {
       if (!conversation) {
         return;
       }
-      stream = await conversation.stream();
-      for await (const message of stream) {
+      const stream = await conversation.stream();
+      stopStream = stream.return?.bind(stream);
+      for await (const message of stream as unknown as AsyncIterable<DecodedMessage>) {
         if (!isMounted || !message) {
           break;
         }
@@ -108,11 +109,8 @@ export default function ChatPanel() {
 
     return () => {
       isMounted = false;
-      if (stream) {
-        const iterator = stream as unknown as AsyncIterator<DecodedMessage>;
-        if (iterator.return) {
-          void iterator.return();
-        }
+      if (stopStream) {
+        void stopStream();
       }
     };
   }, [conversation]);
