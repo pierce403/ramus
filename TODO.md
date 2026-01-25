@@ -25,8 +25,8 @@
 - [x] Scaffold TypeScript + React app.
 - [x] Design the Ramus persona voice and message templates.
 - [x] Build pages: Home, How it Works, Live Bounties, Submit Proof, Bot Chat.
-- [ ] Add XMTP-based chat UI to talk to the bot.
-- [ ] Provide bounty guidelines + proof requirements.
+- [x] Add XMTP-based chat UI to talk to the bot.
+- [x] Provide bounty guidelines + proof requirements.
 
 ## Demo + bounty proof
 - [ ] Run at least one real POIDH bounty end-to-end (not completed by you/close contacts).
