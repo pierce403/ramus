@@ -6,7 +6,7 @@ from .config import load_config
 from .evaluator import Evaluator, EvaluationConfig
 from .poidh.client import PoidhClient
 from .runner import BotRunner, RunnerConfig
-from .state import MemoryStateStore
+from .state import SQLiteStateStore
 from .wallet import init_wallet
 
 
@@ -16,7 +16,7 @@ def main() -> None:
     runner_config = RunnerConfig(poll_interval_seconds=60, bounty_reward_wei=0)
     poidh = PoidhClient(wallet=wallet, config=config)
     evaluator = Evaluator(EvaluationConfig(ai_endpoint=config.ai_score_endpoint))
-    state = MemoryStateStore()
+    state = SQLiteStateStore(config.state_db_path)
 
     runner = BotRunner(
         config=config,

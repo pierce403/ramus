@@ -12,7 +12,7 @@
 - [x] Build bot core loop: create bounty -> wait -> evaluate -> select -> pay.
 - [x] Implement deterministic selection rubric with an optional AI assist (documented).
 - [x] Add submission verification helpers (image/video checks, metadata capture, integrity checks).
-- [ ] Store state (bounty IDs, submissions, decisions, payouts) in a durable store.
+- [x] Store state (bounty IDs, submissions, decisions, payouts) in a durable store.
 - [ ] Add audit log + reasoning report for each bounty run.
 - [ ] Add safety rails: timeouts, retry logic, dispute handling, and manual override hooks.
 

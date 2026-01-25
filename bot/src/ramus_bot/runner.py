@@ -48,6 +48,7 @@ class BotRunner:
             return
 
         claims = self.poidh.fetch_claims(active.bounty_id)
+        self.state.record_claims(active.bounty_id, claims)
         if not claims:
             logger.info("No claims yet for bounty {}", active.bounty_id)
             return
@@ -60,6 +61,7 @@ class BotRunner:
             return
 
         tx_hash = self.poidh.accept_claim(active.bounty_id, decision.winner_claim_id)
+        self.state.record_payout(active.bounty_id, decision.winner_claim_id, tx_hash)
         self.state.mark_bounty_closed(active.bounty_id)
         logger.info("Accepted claim {} for bounty {} (tx {})", decision.winner_claim_id, active.bounty_id, tx_hash)
 
