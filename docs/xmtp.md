@@ -18,6 +18,18 @@ Ramus expects either plain text commands (`status`, `help`) or JSON:
 - `XMTP_ENV` (production or dev)
 - `XMTP_DB_PATH`
 - `XMTP_WALLET_KEY` (optional; must match `WALLET_PRIVATE_KEY`)
+- `OPERATOR_ENS` (defaults to `deanpierce.eth`)
+- `OPERATOR_ADDRESS` (optional override for the operator address)
+- `ETH_MAINNET_RPC_URL` (used for ENS resolution)
+
+## Admin commands (operator only)
+
+```json
+{"action": "admin.set_venice_key", "payload": {"key": "VENICE_API_KEY"}}
+{"action": "admin.set_venice_model", "payload": {"model": "llama-3.3-70b"}}
+```
+
+Admin commands write to the bot's `.env` file and take effect after a restart.
 
 ## Browser SDK
 

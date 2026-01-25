@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import os
+from dataclasses import replace
+from pathlib import Path
 
 from loguru import logger
+from web3 import Web3
 from xmtp.types import ClientOptions
 from xmtp_agent import Agent
 from xmtp_agent.user import create_signer, create_user
@@ -20,6 +24,7 @@ class XmtpBot:
         self.poidh = poidh
         self.state = state
         self._setup_notified: set[str] = set()
+        self._operator_address: str | None = None
 
     async def start(self) -> None:
         user = create_user(self._xmtp_key())
@@ -38,7 +43,7 @@ class XmtpBot:
         async def on_text(ctx) -> None:  # type: ignore[override]
             text = str(ctx.message.content)
             command = parse_command(text)
-            response = await self._handle_command(command)
+            response = await self._handle_command(ctx, command)
             setup_notice = self._setup_notice(ctx)
             if setup_notice:
                 response = f"{setup_notice}\n\n{response}"
@@ -76,7 +81,127 @@ class XmtpBot:
             f"Operator should set {missing_list} in the bot environment."
         )
 
-    async def _handle_command(self, command: Command) -> str:
+    def _resolve_operator_address(self) -> str | None:
+        if self._operator_address:
+            return self._operator_address
+
+        if self.config.operator_address:
+            try:
+                self._operator_address = Web3.to_checksum_address(self.config.operator_address)
+            except ValueError:
+                logger.warning("Invalid OPERATOR_ADDRESS: {}", self.config.operator_address)
+                return None
+            return self._operator_address
+
+        if not self.config.operator_ens:
+            return None
+
+        try:
+            w3 = Web3(Web3.HTTPProvider(self.config.eth_mainnet_rpc_url))
+            if not w3.is_connected():
+                logger.warning("Failed to connect to mainnet RPC for ENS resolution.")
+                return None
+            if not getattr(w3, "ens", None):
+                logger.warning("ENS resolver unavailable in web3.")
+                return None
+            address = w3.ens.address(self.config.operator_ens)
+            if not address:
+                logger.warning("Failed to resolve operator ENS: {}", self.config.operator_ens)
+                return None
+            self._operator_address = Web3.to_checksum_address(address)
+            logger.info("Resolved operator ENS {} to {}", self.config.operator_ens, self._operator_address)
+            return self._operator_address
+        except Exception as exc:
+            logger.warning("ENS resolution failed: {}", exc)
+            return None
+
+    def _sender_address(self, ctx) -> str | None:
+        return (
+            getattr(ctx.message, "sender_address", None)
+            or getattr(ctx.message, "sender", None)
+            or getattr(ctx.message, "from_address", None)
+        )
+
+    def _is_operator(self, ctx) -> bool:
+        sender = self._sender_address(ctx)
+        operator = self._resolve_operator_address()
+        if not sender or not operator:
+            return False
+        try:
+            return Web3.to_checksum_address(sender) == operator
+        except ValueError:
+            return False
+
+    def _env_file_path(self) -> Path:
+        env_override = os.getenv("RAMUS_ENV_FILE")
+        if env_override:
+            return Path(env_override).expanduser()
+
+        root_dir = Path(__file__).resolve().parents[3]
+        root_env = root_dir / ".env"
+        if root_env.exists():
+            return root_env
+
+        bot_env = root_dir / "bot" / ".env"
+        return bot_env
+
+    def _update_env_file(self, key: str, value: str) -> Path:
+        env_path = self._env_file_path()
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+
+        lines: list[str] = []
+        if env_path.exists():
+            lines = env_path.read_text(encoding="utf-8").splitlines()
+
+        updated = False
+        for idx, line in enumerate(lines):
+            if line.startswith(f"{key}="):
+                lines[idx] = f"{key}={value}"
+                updated = True
+                break
+
+        if not updated:
+            lines.append(f"{key}={value}")
+
+        data = "\n".join(lines).rstrip("\n") + "\n"
+        if env_path.exists():
+            env_path.write_text(data, encoding="utf-8")
+        else:
+            fd = os.open(env_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(data)
+
+        os.environ[key] = value
+        return env_path
+
+    def _handle_admin_command(self, ctx, command: Command) -> str | None:
+        if not self._is_operator(ctx):
+            return "Unauthorized: admin commands are restricted to the operator."
+
+        if command.action == "admin.set_venice_key":
+            key = str(command.payload.get("key", "")).strip()
+            if not key:
+                return "Missing key. Send {\"action\":\"admin.set_venice_key\",\"payload\":{\"key\":\"...\"}}"
+            env_path = self._update_env_file("VENICE_API_KEY", key)
+            self.config = replace(self.config, venice_api_key=key)
+            return f"VENICE_API_KEY saved to {env_path}. Restart the bot to apply."
+
+        if command.action == "admin.set_venice_model":
+            model = str(command.payload.get("model", "")).strip()
+            if not model:
+                return "Missing model. Send {\"action\":\"admin.set_venice_model\",\"payload\":{\"model\":\"...\"}}"
+            env_path = self._update_env_file("VENICE_MODEL", model)
+            self.config = replace(self.config, venice_model=model)
+            return f"VENICE_MODEL saved to {env_path}. Restart the bot to apply."
+
+        return None
+
+    async def _handle_command(self, ctx, command: Command) -> str:
+        if command.action.startswith("admin."):
+            admin_response = self._handle_admin_command(ctx, command)
+            if admin_response is not None:
+                return admin_response
+            return help_text()
         if command.action == "help":
             return help_text()
         if command.action == "status":

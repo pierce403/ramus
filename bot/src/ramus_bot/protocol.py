@@ -37,5 +37,7 @@ def help_text() -> str:
         "Ramus commands:\n"
         "- status\n"
         "- help\n"
-        "- send JSON: {\"action\": \"bounty.create\", \"payload\": {\"title\": ..., \"description\": ..., \"reward_wei\": ...}}"
+        "- send JSON: {\"action\": \"bounty.create\", \"payload\": {\"title\": ..., \"description\": ..., \"reward_wei\": ...}}\n"
+        "- admin JSON: {\"action\": \"admin.set_venice_key\", \"payload\": {\"key\": \"...\"}}\n"
+        "- admin JSON: {\"action\": \"admin.set_venice_model\", \"payload\": {\"model\": \"...\"}}"
     )

@@ -18,6 +18,9 @@ class BotConfig:
     poidh_api_key: str | None
     wallet_private_key: str
     wallet_address: str | None
+    operator_ens: str | None
+    operator_address: str | None
+    eth_mainnet_rpc_url: str
     xmtp_env: str
     xmtp_db_path: str
     xmtp_wallet_key: str | None
@@ -131,6 +134,9 @@ def load_config() -> BotConfig:
         poidh_api_key=os.getenv("POIDH_API_KEY"),
         wallet_private_key=wallet_private_key,
         wallet_address=os.getenv("WALLET_ADDRESS"),
+        operator_ens=os.getenv("OPERATOR_ENS", "deanpierce.eth"),
+        operator_address=os.getenv("OPERATOR_ADDRESS"),
+        eth_mainnet_rpc_url=os.getenv("ETH_MAINNET_RPC_URL", "https://cloudflare-eth.com"),
         xmtp_env=os.getenv("XMTP_ENV", "production"),
         xmtp_db_path=os.getenv("XMTP_DB_PATH", "./.xmtp"),
         xmtp_wallet_key=wallet_private_key,
