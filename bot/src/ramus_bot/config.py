@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+from decimal import Decimal, InvalidOperation
+
 from eth_account import Account
 from loguru import logger
 from dataclasses import dataclass
@@ -21,6 +23,7 @@ class BotConfig:
     xmtp_wallet_key: str | None
     state_db_path: str
     log_level: str
+    bounty_reward_wei: int
     ai_score_endpoint: str | None
     venice_api_key: str | None
     venice_model: str
@@ -91,8 +94,35 @@ def _resolve_wallet_key() -> str:
     return key
 
 
+def _parse_bounty_reward() -> int:
+    raw_wei = os.getenv("BOUNTY_REWARD_WEI")
+    raw_eth = os.getenv("BOUNTY_REWARD_ETH")
+
+    if raw_wei:
+        try:
+            reward = int(raw_wei.strip())
+        except ValueError as exc:
+            raise ConfigError("Invalid BOUNTY_REWARD_WEI") from exc
+        if reward < 0:
+            raise ConfigError("BOUNTY_REWARD_WEI must be non-negative")
+        return reward
+
+    if raw_eth:
+        try:
+            reward_eth = Decimal(raw_eth.strip())
+        except InvalidOperation as exc:
+            raise ConfigError("Invalid BOUNTY_REWARD_ETH") from exc
+        if reward_eth < 0:
+            raise ConfigError("BOUNTY_REWARD_ETH must be non-negative")
+        reward = int(reward_eth * Decimal("1000000000000000000"))
+        return reward
+
+    return 0
+
+
 def load_config() -> BotConfig:
     wallet_private_key = _resolve_wallet_key()
+    bounty_reward_wei = _parse_bounty_reward()
     return BotConfig(
         poidh_api_base=os.getenv("POIDH_API_BASE", "https://api.poidh.xyz"),
         poidh_chain_id=int(os.getenv("POIDH_CHAIN_ID", "8453")),
@@ -106,6 +136,7 @@ def load_config() -> BotConfig:
         xmtp_wallet_key=wallet_private_key,
         state_db_path=os.getenv("STATE_DB_PATH", "./state/ramus.sqlite"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
+        bounty_reward_wei=bounty_reward_wei,
         ai_score_endpoint=os.getenv("AI_SCORE_ENDPOINT"),
         venice_api_key=os.getenv("VENICE_API_KEY"),
         venice_model=os.getenv("VENICE_MODEL", "llama-3.3-70b"),

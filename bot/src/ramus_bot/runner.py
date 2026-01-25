@@ -39,12 +39,22 @@ class BotRunner:
     def run_forever(self) -> None:
         logger.info("Starting Ramus bot loop")
         while True:
-            self.run_once()
+            try:
+                self.run_once()
+            except Exception as exc:
+                logger.exception("Runner loop error: {}", exc)
             time.sleep(self.runner_config.poll_interval_seconds)
 
     def run_once(self) -> None:
         active = self.state.get_active_bounty()
         if not active:
+            if self.runner_config.bounty_reward_wei <= 0:
+                logger.warning(
+                    "No bounty reward configured. Set BOUNTY_REWARD_WEI or BOUNTY_REWARD_ETH to enable auto bounties."
+                )
+                return
+            if not self._has_sufficient_balance(self.runner_config.bounty_reward_wei):
+                return
             bounty_id = self._create_default_bounty()
             self.state.create_bounty(bounty_id)
             logger.info("Created bounty {}", bounty_id)
@@ -97,3 +107,14 @@ class BotRunner:
             bounty_type="solo",
         )
         return self.poidh.create_bounty(spec)
+
+    def _has_sufficient_balance(self, reward_wei: int) -> bool:
+        balance = self.poidh.wallet.web3.eth.get_balance(self.poidh.wallet.address)
+        if balance < reward_wei:
+            logger.warning(
+                "Insufficient wallet balance for bounty reward. Balance={} wei, reward={} wei.",
+                balance,
+                reward_wei,
+            )
+            return False
+        return True

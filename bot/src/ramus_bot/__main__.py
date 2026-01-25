@@ -15,7 +15,10 @@ from .xmtp_bot import run_xmtp_bot
 
 def build_runner(config) -> BotRunner:
     wallet = init_wallet(config)
-    runner_config = RunnerConfig(poll_interval_seconds=60, bounty_reward_wei=0)
+    runner_config = RunnerConfig(
+        poll_interval_seconds=60,
+        bounty_reward_wei=config.bounty_reward_wei,
+    )
     poidh = PoidhClient(wallet=wallet, config=config)
     evaluator = Evaluator(
         EvaluationConfig(
