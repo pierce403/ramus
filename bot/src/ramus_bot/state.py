@@ -27,10 +27,19 @@ class StateStore:
     def mark_bounty_closed(self, bounty_id: int) -> None:
         raise NotImplementedError
 
+    def list_claims(self, bounty_id: int) -> list[Claim]:
+        raise NotImplementedError
+
+    def get_claim(self, bounty_id: int, claim_id: int) -> Claim | None:
+        raise NotImplementedError
+
     def record_claims(self, bounty_id: int, claims: list[Claim]) -> None:
         raise NotImplementedError
 
     def record_decision(self, decision: Decision) -> None:
+        raise NotImplementedError
+
+    def list_decisions(self, bounty_id: int) -> list[Decision]:
         raise NotImplementedError
 
     def record_payout(self, bounty_id: int, claim_id: int, tx_hash: str) -> None:
@@ -41,6 +50,7 @@ class MemoryStateStore(StateStore):
     def __init__(self) -> None:
         self._bounty: BountyRecord | None = None
         self._decisions: list[Decision] = []
+        self._claims: dict[int, list[Claim]] = {}
 
     def get_active_bounty(self) -> BountyRecord | None:
         if self._bounty and self._bounty.status == "open":
@@ -59,11 +69,22 @@ class MemoryStateStore(StateStore):
             )
 
     def record_claims(self, bounty_id: int, claims: list[Claim]) -> None:
-        # No-op for memory store.
+        self._claims[bounty_id] = list(claims)
+
+    def list_claims(self, bounty_id: int) -> list[Claim]:
+        return list(self._claims.get(bounty_id, []))
+
+    def get_claim(self, bounty_id: int, claim_id: int) -> Claim | None:
+        for claim in self._claims.get(bounty_id, []):
+            if claim.claim_id == claim_id:
+                return claim
         return None
 
     def record_decision(self, decision: Decision) -> None:
         self._decisions.append(decision)
+
+    def list_decisions(self, bounty_id: int) -> list[Decision]:
+        return [decision for decision in self._decisions if decision.bounty_id == bounty_id]
 
     def record_payout(self, bounty_id: int, claim_id: int, tx_hash: str) -> None:
         return None
@@ -176,6 +197,61 @@ class SQLiteStateStore(StateStore):
                 )
             self._conn.commit()
 
+    def list_claims(self, bounty_id: int) -> list[Claim]:
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                SELECT claim_id, bounty_id, issuer, title, description, created_at, accepted
+                FROM claims
+                WHERE bounty_id = ?
+                ORDER BY created_at ASC
+                """,
+                (bounty_id,),
+            )
+            rows = cursor.fetchall()
+            claims: list[Claim] = []
+            for row in rows:
+                claims.append(
+                    Claim(
+                        claim_id=int(row["claim_id"]),
+                        issuer=str(row["issuer"]),
+                        bounty_id=int(row["bounty_id"]),
+                        bounty_issuer="0x0000000000000000000000000000000000000000",
+                        title=str(row["title"]),
+                        description=str(row["description"]),
+                        created_at=datetime.fromisoformat(row["created_at"]),
+                        accepted=bool(row["accepted"]),
+                    )
+                )
+            return claims
+
+    def get_claim(self, bounty_id: int, claim_id: int) -> Claim | None:
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                SELECT claim_id, bounty_id, issuer, title, description, created_at, accepted
+                FROM claims
+                WHERE bounty_id = ? AND claim_id = ?
+                LIMIT 1
+                """,
+                (bounty_id, claim_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return Claim(
+                claim_id=int(row["claim_id"]),
+                issuer=str(row["issuer"]),
+                bounty_id=int(row["bounty_id"]),
+                bounty_issuer="0x0000000000000000000000000000000000000000",
+                title=str(row["title"]),
+                description=str(row["description"]),
+                created_at=datetime.fromisoformat(row["created_at"]),
+                accepted=bool(row["accepted"]),
+            )
+
     def record_decision(self, decision: Decision) -> None:
         with self._lock:
             cursor = self._conn.cursor()
@@ -193,6 +269,31 @@ class SQLiteStateStore(StateStore):
                 ),
             )
             self._conn.commit()
+
+    def list_decisions(self, bounty_id: int) -> list[Decision]:
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                SELECT bounty_id, winner_claim_id, reasoning, scores_json, created_at
+                FROM decisions
+                WHERE bounty_id = ?
+                ORDER BY created_at ASC
+                """,
+                (bounty_id,),
+            )
+            rows = cursor.fetchall()
+            decisions: list[Decision] = []
+            for row in rows:
+                decisions.append(
+                    Decision(
+                        bounty_id=int(row["bounty_id"]),
+                        winner_claim_id=row["winner_claim_id"],
+                        reasoning=str(row["reasoning"]),
+                        scores=json.loads(row["scores_json"]),
+                    )
+                )
+            return decisions
 
     def record_payout(self, bounty_id: int, claim_id: int, tx_hash: str) -> None:
         with self._lock:

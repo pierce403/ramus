@@ -13,6 +13,14 @@ Ramus expects either plain text commands (`status`, `help`) or JSON:
 {"action": "bounty.create", "payload": {"title": "...", "description": "...", "reward_wei": 0}}
 ```
 
+Natural language queries are supported for common status questions, for example:
+
+```
+How many claims have been submitted?
+Are there any that look good?
+What was wrong with submission #3?
+```
+
 ## Key environment variables
 
 - `XMTP_ENV` (production or dev)

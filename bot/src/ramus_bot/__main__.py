@@ -42,7 +42,7 @@ async def main() -> None:
     config = load_config()
     runner = build_runner(config)
     await asyncio.gather(
-        run_xmtp_bot(config, runner.poidh, runner.state),
+        run_xmtp_bot(config, runner.poidh, runner.state, runner.evaluator),
         asyncio.to_thread(runner.run_forever),
     )
 

@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover - depends on optional ens extra
 
 from .config import BotConfig
 from .ens_utils import namehash, resolve_ens_via_registry
+from .evaluator import Evaluator, ScoreBreakdown
 from .models import BountySpec
 from .poidh.client import PoidhClient
 from .protocol import Command, help_text, parse_command
@@ -28,10 +29,17 @@ from .state import StateStore
 
 
 class XmtpBot:
-    def __init__(self, config: BotConfig, poidh: PoidhClient, state: StateStore) -> None:
+    def __init__(
+        self,
+        config: BotConfig,
+        poidh: PoidhClient,
+        state: StateStore,
+        evaluator: Evaluator,
+    ) -> None:
         self.config = config
         self.poidh = poidh
         self.state = state
+        self.evaluator = evaluator
         self._setup_notified: set[str] = set()
         self._operator_address: str | None = None
 
@@ -534,6 +542,15 @@ class XmtpBot:
             if not active:
                 return "No active bounty."
             return f"Active bounty: {active.bounty_id} (status {active.status})"
+        if command.action == "claims.count":
+            return self._handle_claims_count()
+        if command.action == "claims.list":
+            return self._handle_claims_list()
+        if command.action == "claims.review":
+            return self._handle_claims_review()
+        if command.action == "claim.explain":
+            claim_id = command.payload.get("claim_id")
+            return self._handle_claim_explain(claim_id)
         if command.action == "bounty.create":
             title = str(command.payload.get("title", "Clean a local green space"))
             description = str(
@@ -549,7 +566,72 @@ class XmtpBot:
             return f"Created bounty {bounty_id}."
         return help_text()
 
+    def _load_claims(self):
+        active = self.state.get_active_bounty()
+        if not active:
+            return None, []
+        claims = self.poidh.fetch_claims(active.bounty_id)
+        self.state.record_claims(active.bounty_id, claims)
+        return active, claims
 
-async def run_xmtp_bot(config: BotConfig, poidh: PoidhClient, state: StateStore) -> None:
-    bot = XmtpBot(config, poidh, state)
+    def _handle_claims_count(self) -> str:
+        active, claims = self._load_claims()
+        if not active:
+            return "No active bounty."
+        return f"{len(claims)} claim(s) submitted for bounty {active.bounty_id}."
+
+    def _handle_claims_list(self) -> str:
+        active, claims = self._load_claims()
+        if not active:
+            return "No active bounty."
+        if not claims:
+            return f"No claims yet for bounty {active.bounty_id}."
+        ids = ", ".join(str(claim.claim_id) for claim in claims)
+        return f"Claims for bounty {active.bounty_id}: {ids}."
+
+    def _handle_claims_review(self) -> str:
+        active, claims = self._load_claims()
+        if not active:
+            return "No active bounty."
+        if not claims:
+            return f"No claims yet for bounty {active.bounty_id}."
+        scored: list[tuple[int, ScoreBreakdown]] = []
+        for claim in claims:
+            scored.append((claim.claim_id, self.evaluator.score_claim(claim)))
+        scored.sort(key=lambda item: item[1].total, reverse=True)
+        top = scored[:3]
+        lines = [f"Top submissions for bounty {active.bounty_id}:"]
+        for claim_id, breakdown in top:
+            lines.append(f"- #{claim_id}: {breakdown.total:.2f} ({', '.join(breakdown.reasons)})")
+        return "\n".join(lines)
+
+    def _handle_claim_explain(self, claim_id) -> str:
+        active = self.state.get_active_bounty()
+        if not active:
+            return "No active bounty."
+        try:
+            claim_id_int = int(claim_id)
+        except (TypeError, ValueError):
+            return "Please specify a claim id, e.g. submission #3."
+
+        claim = self.state.get_claim(active.bounty_id, claim_id_int)
+        if not claim:
+            claims = self.poidh.fetch_claims(active.bounty_id)
+            self.state.record_claims(active.bounty_id, claims)
+            claim = self.state.get_claim(active.bounty_id, claim_id_int)
+        if not claim:
+            return f"Claim #{claim_id_int} not found for bounty {active.bounty_id}."
+
+        breakdown = self.evaluator.score_claim(claim)
+        reasons = ", ".join(breakdown.reasons)
+        return f"Submission #{claim_id_int} scored {breakdown.total:.2f}. Reasons: {reasons}."
+
+
+async def run_xmtp_bot(
+    config: BotConfig,
+    poidh: PoidhClient,
+    state: StateStore,
+    evaluator: Evaluator,
+) -> None:
+    bot = XmtpBot(config, poidh, state, evaluator)
     await bot.start()

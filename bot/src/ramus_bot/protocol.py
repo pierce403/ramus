@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 
 
@@ -42,6 +43,24 @@ def parse_command(text: str) -> Command:
                 value = parts[idx + 1].strip() if len(parts) > idx + 1 else ""
                 return Command(action="admin.set_venice_model", payload={"model": value})
 
+    if "claim" in lowered or "submission" in lowered:
+        match = re.search(r"(submission|claim)\s*#?\s*(\d+)", lowered)
+        if match:
+            claim_id = int(match.group(2))
+            if "wrong" in lowered or "why" in lowered or "what was" in lowered:
+                return Command(action="claim.explain", payload={"claim_id": claim_id})
+            return Command(action="claim.explain", payload={"claim_id": claim_id})
+
+    if "how many" in lowered and "claim" in lowered:
+        return Command(action="claims.count", payload={})
+
+    if "list" in lowered and "claim" in lowered:
+        return Command(action="claims.list", payload={})
+
+    if "look good" in lowered or "best" in lowered or "top" in lowered:
+        if "claim" in lowered or "submission" in lowered:
+            return Command(action="claims.review", payload={})
+
     return Command(action="help", payload={})
 
 
@@ -54,5 +73,8 @@ def help_text() -> str:
         "- admin JSON: {\"action\": \"admin.set_venice_key\", \"payload\": {\"key\": \"...\"}}\n"
         "- admin JSON: {\"action\": \"admin.set_venice_model\", \"payload\": {\"model\": \"...\"}}\n"
         "- admin text: set venice_key <key>\n"
-        "- admin text: set venice_model <model>"
+        "- admin text: set venice_model <model>\n"
+        "- ask: how many claims have been submitted?\n"
+        "- ask: are there any that look good?\n"
+        "- ask: what was wrong with submission #3?"
     )

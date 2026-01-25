@@ -40,6 +40,9 @@ class Evaluator:
     def __init__(self, config: EvaluationConfig | None = None) -> None:
         self.config = config or EvaluationConfig()
 
+    def score_claim(self, claim: Claim) -> ScoreBreakdown:
+        return self._score(claim)
+
     def select_winner(self, bounty_id: int, claims: Iterable[Claim]) -> Decision:
         scores: dict[int, float] = {}
         breakdowns: dict[int, ScoreBreakdown] = {}
