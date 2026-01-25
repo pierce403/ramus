@@ -122,6 +122,14 @@ class XmtpBot:
             if not obj:
                 continue
             fields[f"{label}.__type__"] = type(obj).__name__
+            if label == "ctx":
+                for method_name in ("get_sender_address", "get_client_address"):
+                    method = getattr(obj, method_name, None)
+                    if callable(method):
+                        try:
+                            fields[f"{label}.{method_name}()"] = self._safe_repr(method())
+                        except Exception as exc:
+                            fields[f"{label}.{method_name}()"] = f"<error: {exc}>"
             for attr in self._candidate_field_names(obj):
                 value = getattr(obj, attr, None)
                 fields[f"{label}.{attr}"] = self._safe_repr(value)
@@ -416,6 +424,14 @@ class XmtpBot:
         return None
 
     def _sender_address(self, ctx) -> str | None:
+        if hasattr(ctx, "get_sender_address") and callable(getattr(ctx, "get_sender_address")):
+            try:
+                sender = ctx.get_sender_address()
+                coerced = self._coerce_address(sender)
+                if coerced:
+                    return coerced
+            except Exception:
+                pass
         for obj in (
             ctx,
             getattr(ctx, "message", None),
@@ -424,6 +440,17 @@ class XmtpBot:
             addr = self._extract_address(obj)
             if addr:
                 return addr
+        return None
+
+    def _sender_inbox_id(self, ctx) -> str | None:
+        message = getattr(ctx, "message", None)
+        inbox_id = getattr(message, "sender_inbox_id", None)
+        if inbox_id:
+            return str(inbox_id)
+        conversation = getattr(ctx, "conversation", None)
+        peer_inbox_id = getattr(conversation, "peer_inbox_id", None)
+        if peer_inbox_id:
+            return str(peer_inbox_id)
         return None
 
     def _is_operator(self, ctx) -> bool:
@@ -490,6 +517,9 @@ class XmtpBot:
                 operator = self.config.operator_address
             else:
                 operator = "unknown"
+            inbox_id = self._sender_inbox_id(ctx)
+            if inbox_id:
+                sender = f"{sender} (inbox_id={inbox_id})"
             return (
                 "Unauthorized: admin commands are restricted to the operator. "
                 f"Sender={sender}, Operator={operator}"
