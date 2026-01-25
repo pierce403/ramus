@@ -108,8 +108,11 @@ export default function ChatPanel() {
 
     return () => {
       isMounted = false;
-      if (stream && "return" in stream) {
-        void (stream as AsyncIterator<DecodedMessage>).return?.();
+      if (stream) {
+        const iterator = stream as unknown as AsyncIterator<DecodedMessage>;
+        if (iterator.return) {
+          void iterator.return();
+        }
       }
     };
   }, [conversation]);
