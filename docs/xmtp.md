@@ -29,6 +29,13 @@ Ramus expects either plain text commands (`status`, `help`) or JSON:
 {"action": "admin.set_venice_model", "payload": {"model": "llama-3.3-70b"}}
 ```
 
+Plain text shortcuts:
+
+```
+set venice_key <VENICE_API_KEY>
+set venice_model <llama-3.3-70b>
+```
+
 Admin commands write to the bot's `.env` file and take effect after a restart.
 
 ## Browser SDK
