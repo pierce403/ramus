@@ -4,6 +4,7 @@ import asyncio
 import os
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import httpx
 from loguru import logger
@@ -95,6 +96,13 @@ class XmtpBot:
 
         if not self.config.operator_ens:
             return None
+        if self.config.operator_ens.lower().startswith("0x"):
+            try:
+                self._operator_address = Web3.to_checksum_address(self.config.operator_ens)
+                return self._operator_address
+            except ValueError:
+                logger.warning("Invalid OPERATOR_ENS address: {}", self.config.operator_ens)
+                return None
 
         try:
             w3 = Web3(Web3.HTTPProvider(self.config.eth_mainnet_rpc_url))
@@ -115,12 +123,60 @@ class XmtpBot:
             logger.warning("ENS resolution failed: {}", exc)
             return None
 
+    def _extract_address(self, obj: Any) -> str | None:
+        if not obj:
+            return None
+        if isinstance(obj, str):
+            return obj
+        if isinstance(obj, dict):
+            for key in (
+                "sender_address",
+                "senderAddress",
+                "from_address",
+                "fromAddress",
+                "address",
+                "peer_address",
+                "peerAddress",
+                "sender",
+                "from",
+            ):
+                if key in obj:
+                    value = obj.get(key)
+                    if isinstance(value, str):
+                        return value
+                    nested = self._extract_address(value)
+                    if nested:
+                        return nested
+            return None
+        for attr in (
+            "sender_address",
+            "senderAddress",
+            "from_address",
+            "fromAddress",
+            "address",
+            "peer_address",
+            "peerAddress",
+            "sender",
+            "from",
+        ):
+            value = getattr(obj, attr, None)
+            if isinstance(value, str):
+                return value
+            nested = self._extract_address(value)
+            if nested:
+                return nested
+        return None
+
     def _sender_address(self, ctx) -> str | None:
-        return (
-            getattr(ctx.message, "sender_address", None)
-            or getattr(ctx.message, "sender", None)
-            or getattr(ctx.message, "from_address", None)
-        )
+        for obj in (
+            ctx,
+            getattr(ctx, "message", None),
+            getattr(ctx, "conversation", None),
+        ):
+            addr = self._extract_address(obj)
+            if addr:
+                return addr
+        return None
 
     def _is_operator(self, ctx) -> bool:
         sender = self._sender_address(ctx)
@@ -177,7 +233,15 @@ class XmtpBot:
     def _handle_admin_command(self, ctx, command: Command) -> str | None:
         if not self._is_operator(ctx):
             sender = self._sender_address(ctx) or "unknown"
-            operator = self._resolve_operator_address() or "unknown"
+            operator_addr = self._resolve_operator_address()
+            if operator_addr:
+                operator = operator_addr
+            elif self.config.operator_ens:
+                operator = f"{self.config.operator_ens} (unresolved)"
+            elif self.config.operator_address:
+                operator = self.config.operator_address
+            else:
+                operator = "unknown"
             return (
                 "Unauthorized: admin commands are restricted to the operator. "
                 f"Sender={sender}, Operator={operator}"
