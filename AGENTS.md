@@ -28,6 +28,10 @@ Planned layout (update as it becomes real):
 cd web && npm run build
 ```
 
+## Utilities
+
+- `scripts/create_bounty.py` creates a POIDH bounty directly using `PoidhClient` (no XMTP). Example: `python scripts/create_bounty.py --title "Test" --description "..." --reward-eth 0.001`. Loads env from `RAMUS_ENV_FILE`, `./.env`, or `./bot/.env`.
+
 ## Coding Conventions
 
 - Document any style or naming conventions as they emerge.
