@@ -50,6 +50,7 @@ cd web && npm run build
 - `OPERATOR_ENS` is preferred when set; `OPERATOR_ADDRESS` is only used if ENS is blank or fails to resolve. See `bot/src/ramus_bot/xmtp_bot.py`.
 - POIDH `createSoloBounty`/`createOpenBounty` on Base reverts below ~`0.001 ETH` (custom error `0x0fa2e38d` seen). With default 10% reward, wallet balance must be ≥`0.01 ETH` to pass.
 - POIDH `getBounties(offset)` returns a fixed chunk (10 entries) even past the end, so `fetch_bounties` must bound by `getBountiesLength()` (fixed in `bot/src/ramus_bot/poidh/client.py`).
+- POIDH v3 bounties on Base are not yet shown on `poidh.xyz` (tRPC returns v2 data for `chainId=8453`). Repro: `curl 'https://poidh.xyz/api/trpc/bounties.fetch?...'` with `{id:13,chainId:8453}` returns the “Take a pic of a parking lot” bounty even though v3 contract `0x5555Fa...` has `bountyId=13` issued by `0xD25D...`.
 
 ## Dependencies
 
