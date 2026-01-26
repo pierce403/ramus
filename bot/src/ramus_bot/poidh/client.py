@@ -81,12 +81,15 @@ class PoidhClient:
         with rpc_context("fetching bounties"):
             contract = self._contract()
             bounties: list[Bounty] = []
+            total = int(contract.functions.getBountiesLength().call())
             offset = 0
-            while True:
+            while offset < total:
                 chunk = contract.functions.getBounties(offset).call()
                 if not chunk:
                     break
                 for raw in chunk:
+                    if len(bounties) >= total:
+                        break
                     bounties.append(self._parse_bounty(raw))
                 offset += len(chunk)
             return bounties

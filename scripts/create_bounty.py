@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 BOT_SRC = ROOT_DIR / "bot" / "src"
 sys.path.insert(0, str(BOT_SRC))
+MIN_REWARD_WEI = 10**15  # 0.001 ETH (Base POIDH minimum observed via eth_call)
 
 
 def _load_env() -> str | None:
@@ -130,6 +131,11 @@ def main() -> int:
             reward_wei = _auto_reward_wei(config, client)
             if reward_wei <= 0:
                 raise ValueError("Auto reward resolved to 0; fund the wallet or set an explicit reward.")
+            if reward_wei < MIN_REWARD_WEI:
+                print(
+                    f"Auto reward {reward_wei} wei is below minimum; using {MIN_REWARD_WEI} wei instead."
+                )
+                reward_wei = MIN_REWARD_WEI
         else:
             reward_wei = _parse_reward(args.reward_wei, args.reward_eth, config.bounty_reward_wei)
         spec = BountySpec(

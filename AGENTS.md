@@ -30,7 +30,7 @@ cd web && npm run build
 
 ## Utilities
 
-- `scripts/create_bounty.py` creates a POIDH bounty directly using `PoidhClient` (no XMTP). Defaults to a Ramus-themed title/description; use `--reward-auto` to apply the 10% wallet-balance helper. Example: `python scripts/create_bounty.py --title "Test" --description "..." --reward-eth 0.001`. Loads env from `RAMUS_ENV_FILE`, `./.env`, or `./bot/.env`.
+- `scripts/create_bounty.py` creates a POIDH bounty directly using `PoidhClient` (no XMTP). Defaults to a Ramus-themed title/description; `--reward-auto` applies the 10% wallet-balance helper and clamps to the Base minimum (`0.001 ETH`). Example: `python scripts/create_bounty.py --title "Test" --description "..." --reward-eth 0.001`. Loads env from `RAMUS_ENV_FILE`, `./.env`, or `./bot/.env`.
 
 ## Coding Conventions
 
@@ -49,6 +49,7 @@ cd web && npm run build
 - Ethers v6 `Wallet.createRandom()` returns `HDNodeWallet` (private fields) and is not assignable to `Wallet`; avoid typing the helper as `Wallet` in `web/src/components/ChatPanel.tsx`.
 - `OPERATOR_ENS` is preferred when set; `OPERATOR_ADDRESS` is only used if ENS is blank or fails to resolve. See `bot/src/ramus_bot/xmtp_bot.py`.
 - POIDH `createSoloBounty`/`createOpenBounty` on Base reverts below ~`0.001 ETH` (custom error `0x0fa2e38d` seen). With default 10% reward, wallet balance must be ≥`0.01 ETH` to pass.
+- POIDH `getBounties(offset)` returns a fixed chunk (10 entries) even past the end, so `fetch_bounties` must bound by `getBountiesLength()` (fixed in `bot/src/ramus_bot/poidh/client.py`).
 
 ## Dependencies
 
