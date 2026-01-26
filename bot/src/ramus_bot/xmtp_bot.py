@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import os
 import re
 from dataclasses import replace
@@ -536,7 +537,7 @@ class XmtpBot:
         preface = "I am Ramus, elder of the green. Hear these roots' counsel:"
         return f"{preface}\n{response}"
 
-    async def _handle_command(self, ctx, command: Command) -> str:
+    async def _handle_command(self, ctx, command: Command, allow_freeform: bool = True) -> str:
         if command.action.startswith("admin."):
             admin_response = await self._handle_admin_command(ctx, command)
             if admin_response is not None:
@@ -549,6 +550,10 @@ class XmtpBot:
             if not active:
                 return "No active bounty."
             return f"Active bounty: {active.bounty_id} (status {active.status})"
+        if command.action == "freeform":
+            if not allow_freeform:
+                return help_text()
+            return await self._handle_freeform(ctx, command)
         if command.action == "claims.count":
             return self._handle_claims_count()
         if command.action == "claims.list":
@@ -625,6 +630,88 @@ class XmtpBot:
         breakdown = self.evaluator.score_claim(claim)
         reasons = ", ".join(breakdown.reasons)
         return f"Submission #{claim_id_int} scored {breakdown.total:.2f}. Reasons: {reasons}."
+
+    async def _handle_freeform(self, ctx, command: Command) -> str:
+        text = str(command.payload.get("text", "")).strip()
+        if not text:
+            return help_text()
+        interpreted = await self._interpret_intent(text)
+        if not interpreted:
+            return help_text()
+        return await self._handle_command(ctx, interpreted, allow_freeform=False)
+
+    async def _interpret_intent(self, text: str) -> Command | None:
+        if not self.config.venice_api_key:
+            return None
+        prompt = (
+            "You are a command router for the Ramus bot. "
+            "Map the user text to one of these actions:\n"
+            "- status\n"
+            "- claims.count\n"
+            "- claims.list\n"
+            "- claims.review\n"
+            "- claim.explain (requires claim_id)\n"
+            "- admin.bounty.create (optional title, description, reward_wei)\n"
+            "- admin.claim.accept (requires claim_id)\n"
+            "- admin.set_venice_key (requires key)\n"
+            "- admin.set_venice_model (requires model)\n"
+            "- help\n\n"
+            "Return only JSON: {\"action\": \"...\", \"payload\": {...}}. "
+            "If unsure, return {\"action\":\"help\"}.\n\n"
+            f"User text: {text}"
+        )
+        payload = {
+            "model": self.config.venice_model,
+            "messages": [
+                {"role": "system", "content": "Return JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 200,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.config.venice_api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    f"{self.config.venice_base_url.rstrip('/')}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                content = (
+                    data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                )
+            if not content:
+                return None
+            parsed = self._parse_json_from_text(content)
+            if not parsed:
+                return None
+            action = str(parsed.get("action", "help"))
+            payload_data = parsed.get("payload", {})
+            if not isinstance(payload_data, dict):
+                payload_data = {}
+            return Command(action=action, payload=payload_data)
+        except Exception as exc:
+            logger.warning("Intent interpretation failed: {}", exc)
+            return None
+
+    def _parse_json_from_text(self, text: str) -> dict | None:
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if not match:
+                return None
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return None
 
     async def _handle_admin_bounty_create(self, ctx, command: Command) -> str:
         if not await self._is_operator(ctx):

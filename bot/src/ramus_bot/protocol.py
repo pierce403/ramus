@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 
@@ -13,15 +12,6 @@ class Command:
 
 def parse_command(text: str) -> Command:
     stripped = text.strip()
-    if stripped.startswith("{"):
-        try:
-            data = json.loads(stripped)
-            action = str(data.get("action", "help"))
-            payload = data.get("payload", {}) if isinstance(data.get("payload", {}), dict) else {}
-            return Command(action=action, payload=payload)
-        except json.JSONDecodeError:
-            pass
-
     lowered = stripped.lower()
     tokens = lowered.split()
     if lowered in {"help", "?", "commands"}:
@@ -63,7 +53,7 @@ def parse_command(text: str) -> Command:
         if "claim" in lowered or "submission" in lowered:
             return Command(action="claims.review", payload={})
 
-    return Command(action="help", payload={})
+    return Command(action="freeform", payload={"text": stripped})
 
 
 def help_text() -> str:
@@ -71,9 +61,6 @@ def help_text() -> str:
         "Ramus commands:\n"
         "- status\n"
         "- help\n"
-        "- send JSON: {\"action\": \"bounty.create\", \"payload\": {\"title\": ..., \"description\": ..., \"reward_wei\": ...}}\n"
-        "- admin JSON: {\"action\": \"admin.set_venice_key\", \"payload\": {\"key\": \"...\"}}\n"
-        "- admin JSON: {\"action\": \"admin.set_venice_model\", \"payload\": {\"model\": \"...\"}}\n"
         "- admin text: set venice_key <key>\n"
         "- admin text: set venice_model <model>\n"
         "- admin text: make bounty\n"
