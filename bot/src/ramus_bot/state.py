@@ -54,6 +54,9 @@ class StateStore:
     def clear_bounty_draft(self) -> None:
         raise NotImplementedError
 
+    def bounty_creation_guard(self):
+        raise NotImplementedError
+
 
 class MemoryStateStore(StateStore):
     def __init__(self) -> None:
@@ -61,6 +64,8 @@ class MemoryStateStore(StateStore):
         self._decisions: list[Decision] = []
         self._claims: dict[int, list[Claim]] = {}
         self._draft: BountyDraft | None = None
+        self._creating = False
+        self._lock = threading.Lock()
 
     def get_active_bounty(self) -> BountyRecord | None:
         if self._bounty and self._bounty.status == "open":
@@ -108,6 +113,9 @@ class MemoryStateStore(StateStore):
     def clear_bounty_draft(self) -> None:
         self._draft = None
 
+    def bounty_creation_guard(self):
+        return _BountyCreationGuard(self)
+
 
 class SQLiteStateStore(StateStore):
     def __init__(self, db_path: str) -> None:
@@ -116,6 +124,7 @@ class SQLiteStateStore(StateStore):
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
+        self._creating = False
         self._init_db()
 
     def _init_db(self) -> None:
@@ -381,3 +390,59 @@ class SQLiteStateStore(StateStore):
             cursor = self._conn.cursor()
             cursor.execute("DELETE FROM bounty_drafts")
             self._conn.commit()
+
+    def bounty_creation_guard(self):
+        return _BountyCreationGuard(self)
+
+
+class _BountyCreationGuard:
+    def __init__(self, store: StateStore) -> None:
+        self._store = store
+        self._entered = False
+
+    def __enter__(self) -> bool:
+        if isinstance(self._store, MemoryStateStore):
+            return self._enter_memory(self._store)
+        if isinstance(self._store, SQLiteStateStore):
+            return self._enter_sqlite(self._store)
+        raise NotImplementedError("Unsupported state store for bounty_creation_guard")
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if isinstance(self._store, MemoryStateStore):
+            self._exit_memory(self._store)
+        elif isinstance(self._store, SQLiteStateStore):
+            self._exit_sqlite(self._store)
+
+    def _enter_memory(self, store: MemoryStateStore) -> bool:
+        with store._lock:
+            if store._creating or (store._bounty and store._bounty.status == "open"):
+                return False
+            store._creating = True
+            self._entered = True
+            return True
+
+    def _exit_memory(self, store: MemoryStateStore) -> None:
+        if not self._entered:
+            return
+        with store._lock:
+            store._creating = False
+
+    def _enter_sqlite(self, store: SQLiteStateStore) -> bool:
+        with store._lock:
+            if store._creating:
+                return False
+            cursor = store._conn.cursor()
+            cursor.execute(
+                "SELECT 1 FROM bounties WHERE status = 'open' LIMIT 1"
+            )
+            if cursor.fetchone():
+                return False
+            store._creating = True
+            self._entered = True
+            return True
+
+    def _exit_sqlite(self, store: SQLiteStateStore) -> None:
+        if not self._entered:
+            return
+        with store._lock:
+            store._creating = False

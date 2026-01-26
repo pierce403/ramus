@@ -1018,15 +1018,18 @@ class XmtpBot:
         active = self.state.get_active_bounty()
         if active and active.status == "open":
             return f"Bounty {active.bounty_id} is already open. Close it before drafting a new one."
-        if not self.config.venice_api_key:
-            return "Set VENICE_API_KEY before drafting bounties."
+        with self.state.bounty_creation_guard() as allowed:
+            if not allowed:
+                return "Bounty creation already in progress. Close the open bounty before drafting a new one."
+            if not self.config.venice_api_key:
+                return "Set VENICE_API_KEY before drafting bounties."
 
-        raw = str(command.payload.get("raw", "")).strip()
-        draft = await self._draft_bounty_with_venice(raw)
-        if not draft:
-            return "I couldn't draft a bounty right now. Try again or provide more detail."
-        self.state.save_bounty_draft(draft)
-        return self._format_bounty_draft(draft)
+            raw = str(command.payload.get("raw", "")).strip()
+            draft = await self._draft_bounty_with_venice(raw)
+            if not draft:
+                return "I couldn't draft a bounty right now. Try again or provide more detail."
+            self.state.save_bounty_draft(draft)
+            return self._format_bounty_draft(draft)
 
     async def _handle_admin_bounty_publish(self, ctx, command: Command) -> str:
         if not await self._is_operator(ctx):
@@ -1034,29 +1037,32 @@ class XmtpBot:
         active = self.state.get_active_bounty()
         if active and active.status == "open":
             return f"Bounty {active.bounty_id} is already open. Close it before publishing a new one."
-        draft = self.state.get_latest_bounty_draft()
-        if not draft:
-            return "No draft to publish. Ask me to draft a bounty first."
-        if draft.reward_wei > 0:
-            reward_wei = draft.reward_wei
-            reward_source = "draft"
-        else:
-            reward_wei, reward_source = self._default_reward()
-        if reward_wei <= 0:
-            if reward_source.startswith("auto"):
-                return "Wallet balance is empty. Fund the wallet or set BOUNTY_REWARD_WEI/ETH before publishing."
-            return "Set a positive bounty reward (BOUNTY_REWARD_WEI/ETH) before publishing."
+        with self.state.bounty_creation_guard() as allowed:
+            if not allowed:
+                return "Bounty creation already in progress. Close the open bounty before publishing a new one."
+            draft = self.state.get_latest_bounty_draft()
+            if not draft:
+                return "No draft to publish. Ask me to draft a bounty first."
+            if draft.reward_wei > 0:
+                reward_wei = draft.reward_wei
+                reward_source = "draft"
+            else:
+                reward_wei, reward_source = self._default_reward()
+            if reward_wei <= 0:
+                if reward_source.startswith("auto"):
+                    return "Wallet balance is empty. Fund the wallet or set BOUNTY_REWARD_WEI/ETH before publishing."
+                return "Set a positive bounty reward (BOUNTY_REWARD_WEI/ETH) before publishing."
 
-        spec = BountySpec(title=draft.title, description=draft.description, reward_wei=reward_wei)
-        try:
-            bounty_id = self.poidh.create_bounty(spec)
-        except Exception as exc:
-            logger.exception("Bounty publish failed")
-            return self._format_error_for_user(exc)
-        self.state.create_bounty(bounty_id)
-        self.state.clear_bounty_draft()
-        bounty_url = f"{self.config.poidh_app_base.rstrip('/')}/bounty/{bounty_id}"
-        return f"Published bounty {bounty_id}. Link: {bounty_url}"
+            spec = BountySpec(title=draft.title, description=draft.description, reward_wei=reward_wei)
+            try:
+                bounty_id = self.poidh.create_bounty(spec)
+            except Exception as exc:
+                logger.exception("Bounty publish failed")
+                return self._format_error_for_user(exc)
+            self.state.create_bounty(bounty_id)
+            self.state.clear_bounty_draft()
+            bounty_url = f"{self.config.poidh_app_base.rstrip('/')}/bounty/{bounty_id}"
+            return f"Published bounty {bounty_id}. Link: {bounty_url}"
 
     async def _handle_admin_bounty_reject(self, ctx, command: Command) -> str:
         if not await self._is_operator(ctx):
@@ -1073,35 +1079,38 @@ class XmtpBot:
         active = self.state.get_active_bounty()
         if active and active.status == "open":
             return f"Bounty {active.bounty_id} is already open. Close it before creating a new one."
+        with self.state.bounty_creation_guard() as allowed:
+            if not allowed:
+                return "Bounty creation already in progress. Close the open bounty before creating a new one."
 
-        title = str(command.payload.get("title", "Clean a local green space"))
-        description = str(
-            command.payload.get(
-                "description",
-                "Pick up trash in a nearby park or green space and share before/after photos.",
+            title = str(command.payload.get("title", "Clean a local green space"))
+            description = str(
+                command.payload.get(
+                    "description",
+                    "Pick up trash in a nearby park or green space and share before/after photos.",
+                )
             )
-        )
-        reward_wei = command.payload.get("reward_wei")
-        reward_source = "payload"
-        if reward_wei is None:
-            reward_wei, reward_source = self._default_reward()
-        try:
-            reward_wei_int = int(reward_wei)
-        except (TypeError, ValueError):
-            reward_wei_int = 0
-        if reward_wei_int <= 0:
-            if reward_source.startswith("auto"):
-                return "Wallet balance is empty. Fund the wallet or set BOUNTY_REWARD_WEI/ETH before creating a bounty."
-            return "Set a positive bounty reward (BOUNTY_REWARD_WEI/ETH) before creating a bounty."
+            reward_wei = command.payload.get("reward_wei")
+            reward_source = "payload"
+            if reward_wei is None:
+                reward_wei, reward_source = self._default_reward()
+            try:
+                reward_wei_int = int(reward_wei)
+            except (TypeError, ValueError):
+                reward_wei_int = 0
+            if reward_wei_int <= 0:
+                if reward_source.startswith("auto"):
+                    return "Wallet balance is empty. Fund the wallet or set BOUNTY_REWARD_WEI/ETH before creating a bounty."
+                return "Set a positive bounty reward (BOUNTY_REWARD_WEI/ETH) before creating a bounty."
 
-        spec = BountySpec(title=title, description=description, reward_wei=reward_wei_int)
-        try:
-            bounty_id = self.poidh.create_bounty(spec)
-        except Exception as exc:
-            logger.exception("Bounty create failed")
-            return self._format_error_for_user(exc)
-        self.state.create_bounty(bounty_id)
-        return f"Created bounty {bounty_id}."
+            spec = BountySpec(title=title, description=description, reward_wei=reward_wei_int)
+            try:
+                bounty_id = self.poidh.create_bounty(spec)
+            except Exception as exc:
+                logger.exception("Bounty create failed")
+                return self._format_error_for_user(exc)
+            self.state.create_bounty(bounty_id)
+            return f"Created bounty {bounty_id}."
 
     async def _handle_admin_claim_accept(self, ctx, command: Command) -> str:
         if not await self._is_operator(ctx):

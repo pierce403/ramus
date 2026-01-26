@@ -55,19 +55,23 @@ class BotRunner:
             return
         active = self.state.get_active_bounty()
         if not active:
-            reward_wei = self._default_reward_wei(settings)
-            if reward_wei <= 0:
-                logger.warning(
-                    "No bounty reward configured and wallet balance is empty. "
-                    "Set BOUNTY_REWARD_WEI or BOUNTY_REWARD_ETH to enable auto bounties."
-                )
+            with self.state.bounty_creation_guard() as allowed:
+                if not allowed:
+                    logger.info("Skipping bounty creation; an open or pending bounty already exists.")
+                    return
+                reward_wei = self._default_reward_wei(settings)
+                if reward_wei <= 0:
+                    logger.warning(
+                        "No bounty reward configured and wallet balance is empty. "
+                        "Set BOUNTY_REWARD_WEI or BOUNTY_REWARD_ETH to enable auto bounties."
+                    )
+                    return
+                if not self._has_sufficient_balance(reward_wei):
+                    return
+                bounty_id = self._create_default_bounty(reward_wei)
+                self.state.create_bounty(bounty_id)
+                logger.info("Created bounty {}", bounty_id)
                 return
-            if not self._has_sufficient_balance(reward_wei):
-                return
-            bounty_id = self._create_default_bounty(reward_wei)
-            self.state.create_bounty(bounty_id)
-            logger.info("Created bounty {}", bounty_id)
-            return
 
         claims = self.poidh.fetch_claims(active.bounty_id)
         self.state.record_claims(active.bounty_id, claims)
