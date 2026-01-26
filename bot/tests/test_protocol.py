@@ -36,3 +36,4 @@ def test_help_text_does_not_include_examples() -> None:
     text = help_text()
     assert "admin text" not in text
     assert "how many claims" not in text
+    assert "Operator only:" in text

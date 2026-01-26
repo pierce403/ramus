@@ -41,6 +41,10 @@ class WalletError(RuntimeError):
     pass
 
 
+class RateLimitError(RuntimeError):
+    pass
+
+
 _rpc_context = threading.local()
 
 
@@ -83,7 +87,7 @@ class RetryingHTTPProvider(HTTPProvider):
     def make_request(self, method, params):  # type: ignore[override]
         for attempt in range(1, self._max_retries + 1):
             try:
-                self._sleep_if_rate_limited(method, params)
+                self._raise_if_rate_limited(method, params)
                 return super().make_request(method, params)
             except Exception as exc:
                 if not _is_rate_limit_error(exc) or attempt >= self._max_retries:
@@ -99,9 +103,9 @@ class RetryingHTTPProvider(HTTPProvider):
                     attempt,
                     self._max_retries,
                 )
-                time.sleep(delay)
+                raise RateLimitError(_format_rate_limit_message(delay, until, level)) from exc
 
-    def _sleep_if_rate_limited(self, method, params) -> None:
+    def _raise_if_rate_limited(self, method, params) -> None:
         with self._rate_limit_lock:
             now = time.time()
             wait_seconds = max(0.0, self._rate_limit_until - now)
@@ -113,16 +117,17 @@ class RetryingHTTPProvider(HTTPProvider):
             endpoint = getattr(self, "endpoint_uri", None) or "RPC"
             op_context = _current_rpc_context()
             op_prefix = f"{op_context}: " if op_context else ""
+            until_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + wait_seconds))
             logger.warning(
-                "RPC globally rate limited (level {}) before {}{}{} on {}. Waiting {:.1f}s",
+                "RPC globally rate limited (level {}, until {}) before {}{}{} on {}. Failing fast",
                 level,
+                until_iso,
                 op_prefix,
                 detail,
                 f" [{extra}]" if extra else "",
                 endpoint,
-                wait_seconds,
             )
-            time.sleep(wait_seconds)
+            raise RateLimitError(_format_rate_limit_message(wait_seconds, time.time() + wait_seconds, level))
 
     def _register_rate_limit(self) -> tuple[float, int, float]:
         now = time.time()
@@ -154,7 +159,7 @@ class RetryingHTTPProvider(HTTPProvider):
         op_prefix = f"{op_context}: " if op_context else ""
         until_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(until))
         logger.warning(
-            "RPC rate limited during {}{}{} on {} ({}). Backing off {:.0f}s (level {}, until {}) (attempt {}/{})",
+            "RPC rate limited during {}{}{} on {} ({}). Cooling down {:.0f}s (level {}, until {}) (attempt {}/{})",
             op_prefix,
             detail,
             f" [{extra}]" if extra else "",
@@ -166,6 +171,11 @@ class RetryingHTTPProvider(HTTPProvider):
             attempt,
             max_attempts,
         )
+
+
+def _format_rate_limit_message(delay: float, until: float, level: int) -> str:
+    until_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(until))
+    return f"RPC rate limited: cooldown {int(delay)}s (level {level}, until {until_iso})."
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:

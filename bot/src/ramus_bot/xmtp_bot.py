@@ -781,6 +781,48 @@ class XmtpBot:
         preface = "I am Ramus, elder of the green. Hear these roots' counsel:"
         return f"{preface}\n{response}"
 
+    async def _respond_as_ramus(self, text: str) -> str | None:
+        if not self.config.venice_api_key:
+            return None
+        payload = {
+            "model": self.config.venice_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are Ramus, an ancient tree spirit. Respond calmly and poetically, "
+                        "but be concise (1-4 sentences)."
+                    ),
+                },
+                {"role": "user", "content": text},
+            ],
+            "temperature": 0.5,
+            "max_tokens": 200,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.config.venice_api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    f"{self.config.venice_base_url.rstrip('/')}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                content = (
+                    data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                )
+                if content:
+                    return content.strip()
+        except Exception as exc:
+            logger.warning("Persona chat failed: {}", exc)
+        return None
+
     async def _handle_command(self, ctx, command: Command, allow_freeform: bool = True) -> tuple[str, bool]:
         if command.action.startswith("admin."):
             admin_response = await self._handle_admin_command(ctx, command)
@@ -795,8 +837,7 @@ class XmtpBot:
         if command.action == "freeform":
             if not allow_freeform:
                 return help_text(), False
-            response, resolved = await self._handle_freeform(ctx, command)
-            return response, not resolved
+            return await self._handle_freeform(ctx, command)
         if command.action == "claims.count":
             return self._handle_claims_count(), False
         if command.action == "claims.list":
@@ -887,12 +928,18 @@ class XmtpBot:
         if not text:
             return help_text(), False
         interpreted = await self._interpret_intent(text)
+        if interpreted and interpreted.action == "help":
+            interpreted = None
         if not interpreted:
+            if self.config.venice_api_key:
+                response = await self._respond_as_ramus(text)
+                if response:
+                    return response, False
             return help_text(), False
         if interpreted.action in {"admin.bounty.draft", "bounty.draft"} and "raw" not in interpreted.payload:
             interpreted = Command(action=interpreted.action, payload={**interpreted.payload, "raw": text})
-        response, _ = await self._handle_command(ctx, interpreted, allow_freeform=False)
-        return response, True
+        response, use_persona = await self._handle_command(ctx, interpreted, allow_freeform=False)
+        return response, use_persona
 
     async def _interpret_intent(self, text: str) -> Command | None:
         if not self.config.venice_api_key:
