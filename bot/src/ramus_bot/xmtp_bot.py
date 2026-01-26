@@ -111,7 +111,7 @@ class XmtpBot:
             and "infura.io" not in self.config.poidh_rpc_url
             and "mainnet.base.org" in self.config.poidh_rpc_url
         ):
-            missing.append("INFURA_API_KEY (recommended to avoid Base RPC 429s)")
+            missing.append("INFURA_API_KEY (required for Base RPC)")
 
         if not missing:
             return None
@@ -660,14 +660,12 @@ class XmtpBot:
                 return "Missing key. Send {\"action\":\"admin.set_infura_key\",\"payload\":{\"key\":\"...\"}}"
             env_path = self._update_env_file("INFURA_API_KEY", key)
             self.config = replace(self.config, infura_api_key=key)
-            if "mainnet.base.org" in self.config.poidh_rpc_url or "infura.io" in self.config.poidh_rpc_url:
-                from .config import _infura_rpc_url  # local import to avoid cycles
+            from .config import _infura_rpc_url  # local import to avoid cycles
 
-                infura_url = _infura_rpc_url(self.config.poidh_chain_slug, key)
-                if infura_url:
-                    self._update_env_file("POIDH_RPC_URL", infura_url)
-            if "cloudflare-eth.com" in self.config.eth_mainnet_rpc_url or "infura.io" in self.config.eth_mainnet_rpc_url:
-                self._update_env_file("ETH_MAINNET_RPC_URL", f"https://mainnet.infura.io/v3/{key}")
+            infura_url = _infura_rpc_url(self.config.poidh_chain_slug, key)
+            if infura_url:
+                self._update_env_file("POIDH_RPC_URL", infura_url)
+            self._update_env_file("ETH_MAINNET_RPC_URL", f"https://mainnet.infura.io/v3/{key}")
             return f"INFURA_API_KEY saved to {env_path}. Restart the bot to apply."
 
         if command.action == "admin.set_bounty_reward_wei":
