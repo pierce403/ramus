@@ -36,7 +36,7 @@ python -m ramus_bot
 
 ### Key env vars (bot)
 
-See `bot/.env.example` and `docs/secrets.md`. If `WALLET_PRIVATE_KEY` is blank, Ramus generates a key and stores it at `WALLET_KEY_PATH`. XMTP uses the same wallet key (if `XMTP_WALLET_KEY` is set, it must match). Set `INFURA_API_KEY` (recommended) to avoid Base public RPC rate limits; the bot can auto-fill `POIDH_RPC_URL` after you set it via XMTP. Set `BOUNTY_REWARD_WEI` or `BOUNTY_REWARD_ETH` (native chain token: ETH on Base/Arbitrum, DEGEN on Degen) to set a fixed automatic bounty reward; if unset, the bot uses 10% of the wallet balance. Toggle the runner with `AUTO_RUN`. For AI scoring, set `VENICE_API_KEY`. Operator admin is controlled via `OPERATOR_ENS`/`OPERATOR_ADDRESS`.
+See `bot/.env.example` and `docs/secrets.md`. If `WALLET_PRIVATE_KEY` is blank, Ramus generates a key and stores it at `WALLET_KEY_PATH`. XMTP uses the same wallet key (if `XMTP_WALLET_KEY` is set, it must match). Set `INFURA_API_KEY` (recommended) to avoid Base public RPC rate limits; the bot can auto-fill `POIDH_RPC_URL` for Base mainnet after you set it via XMTP. Set `BOUNTY_REWARD_WEI` or `BOUNTY_REWARD_ETH` (native chain token: ETH on Base/Arbitrum, DEGEN on Degen) to set a fixed automatic bounty reward; if unset, the bot uses 10% of the wallet balance. Toggle the runner with `AUTO_RUN`. For AI scoring, set `VENICE_API_KEY`. Operator admin is controlled via `OPERATOR_ENS`/`OPERATOR_ADDRESS`.
 
 ## Web setup
 

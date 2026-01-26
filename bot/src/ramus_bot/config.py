@@ -131,19 +131,9 @@ def _parse_bounty_reward() -> tuple[int, str]:
 
 def _infura_rpc_url(chain_slug: str, api_key: str) -> str | None:
     slug = chain_slug.strip().lower()
-    mapping = {
-        "base": "https://base-mainnet.infura.io/v3/{key}",
-        "base-sepolia": "https://base-sepolia.infura.io/v3/{key}",
-        "base_sepolia": "https://base-sepolia.infura.io/v3/{key}",
-        "arbitrum": "https://arbitrum-mainnet.infura.io/v3/{key}",
-        "arbitrum-sepolia": "https://arbitrum-sepolia.infura.io/v3/{key}",
-        "optimism": "https://optimism-mainnet.infura.io/v3/{key}",
-        "optimism-sepolia": "https://optimism-sepolia.infura.io/v3/{key}",
-    }
-    template = mapping.get(slug)
-    if not template:
+    if slug != "base":
         return None
-    return template.format(key=api_key)
+    return f"https://base-mainnet.infura.io/v3/{api_key}"
 
 
 def _resolve_poidh_rpc_url(chain_slug: str, api_key: str | None) -> str:
@@ -154,7 +144,7 @@ def _resolve_poidh_rpc_url(chain_slug: str, api_key: str | None) -> str:
         infura_url = _infura_rpc_url(chain_slug, api_key)
         if infura_url:
             return infura_url
-        logger.warning("INFURA_API_KEY set but no Infura endpoint mapping for chain slug {}", chain_slug)
+        logger.warning("INFURA_API_KEY set but Infura is only used for Base mainnet (chain slug {}).", chain_slug)
     return "https://mainnet.base.org"
 
 

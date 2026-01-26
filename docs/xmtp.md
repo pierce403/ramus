@@ -54,7 +54,7 @@ set auto_run on
 Admin commands write to the bot's `.env` file. Reward and auto-run changes update the live runner; other config updates may require a restart.
 
 If no bounty reward is configured, Ramus uses ~10% of the wallet balance as the default reward.
-If you set `INFURA_API_KEY`, Ramus will use Infura for Base RPC after restart.
+If you set `INFURA_API_KEY`, Ramus will use Infura for Base mainnet RPC after restart.
 
 ## Browser SDK
 

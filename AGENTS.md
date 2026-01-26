@@ -62,7 +62,7 @@ cd web && npm run build
 - XMTP responses now emit stdout markers when processing/sent (`bot/src/ramus_bot/xmtp_bot.py`).
 - Web3 SignedTransaction uses `raw_transaction` in newer versions; `bot/src/ramus_bot/poidh/client.py` now handles both `rawTransaction` and `raw_transaction`.
 - Base RPC rate limits (429) trigger a shared cooldown (10m, 20m, 40m, ...) in `bot/src/ramus_bot/wallet.py`, so all threads pause before retrying. Warnings include high-level context (e.g., creating bounty, fetching claims) via `rpc_context`.
-- `INFURA_API_KEY` is supported; XMTP command `set infura_key <key>` updates env + RPC URLs (restart required).
+- `INFURA_API_KEY` is supported for Base mainnet only; XMTP command `set infura_key <key>` updates env + RPC URLs (restart required).
 
 ## Rapport & Reflection
 
