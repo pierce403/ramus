@@ -72,34 +72,86 @@ class RetryingHTTPProvider(HTTPProvider):
         self._max_retries = max_retries
         self._backoff_seconds = backoff_seconds
         self._max_backoff_seconds = max_backoff_seconds
+        self._rate_limit_lock = threading.Lock()
+        self._rate_limit_until = 0.0
+        self._rate_limit_attempts = 0
+        self._last_rate_limit_time = 0.0
+        self._rate_limit_reset_seconds = 30.0
 
     def make_request(self, method, params):  # type: ignore[override]
         for attempt in range(1, self._max_retries + 1):
             try:
+                self._sleep_if_rate_limited(method, params)
                 return super().make_request(method, params)
             except Exception as exc:
                 if not _is_rate_limit_error(exc) or attempt >= self._max_retries:
                     raise
-                delay = min(self._backoff_seconds * (2 ** (attempt - 1)), self._max_backoff_seconds)
-                jitter = random.uniform(0, delay * 0.25)
-                context = _describe_rpc_method(method)
-                detail = f"{context} ({method})" if context else str(method)
-                extra = _describe_rpc_params(method, params)
-                endpoint = getattr(self, "endpoint_uri", None) or "RPC"
-                op_context = _current_rpc_context()
-                op_prefix = f"{op_context}: " if op_context else ""
-                logger.warning(
-                    "RPC rate limited during {}{}{} on {} ({}). Retrying in {:.1f}s (attempt {}/{})",
-                    op_prefix,
-                    detail,
-                    f" [{extra}]" if extra else "",
-                    endpoint,
+                delay = self._register_rate_limit()
+                self._log_rate_limit(
+                    method,
+                    params,
                     exc,
-                    delay + jitter,
+                    delay,
                     attempt,
                     self._max_retries,
                 )
-                time.sleep(delay + jitter)
+                time.sleep(delay)
+
+    def _sleep_if_rate_limited(self, method, params) -> None:
+        with self._rate_limit_lock:
+            now = time.time()
+            wait_seconds = max(0.0, self._rate_limit_until - now)
+        if wait_seconds > 0:
+            context = _describe_rpc_method(method)
+            detail = f"{context} ({method})" if context else str(method)
+            extra = _describe_rpc_params(method, params)
+            endpoint = getattr(self, "endpoint_uri", None) or "RPC"
+            op_context = _current_rpc_context()
+            op_prefix = f"{op_context}: " if op_context else ""
+            logger.warning(
+                "RPC globally rate limited before {}{}{} on {}. Waiting {:.1f}s",
+                op_prefix,
+                detail,
+                f" [{extra}]" if extra else "",
+                endpoint,
+                wait_seconds,
+            )
+            time.sleep(wait_seconds)
+
+    def _register_rate_limit(self) -> float:
+        now = time.time()
+        with self._rate_limit_lock:
+            if now - self._last_rate_limit_time > self._rate_limit_reset_seconds:
+                self._rate_limit_attempts = 0
+            self._last_rate_limit_time = now
+            self._rate_limit_attempts += 1
+            delay = min(
+                self._backoff_seconds * (2 ** (self._rate_limit_attempts - 1)),
+                self._max_backoff_seconds,
+            )
+            jitter = random.uniform(0, delay * 0.25)
+            total_delay = delay + jitter
+            self._rate_limit_until = max(self._rate_limit_until, now + total_delay)
+            return total_delay
+
+    def _log_rate_limit(self, method, params, exc: Exception, delay: float, attempt: int, max_attempts: int) -> None:
+        context = _describe_rpc_method(method)
+        detail = f"{context} ({method})" if context else str(method)
+        extra = _describe_rpc_params(method, params)
+        endpoint = getattr(self, "endpoint_uri", None) or "RPC"
+        op_context = _current_rpc_context()
+        op_prefix = f"{op_context}: " if op_context else ""
+        logger.warning(
+            "RPC rate limited during {}{}{} on {} ({}). Backing off {:.1f}s (attempt {}/{})",
+            op_prefix,
+            detail,
+            f" [{extra}]" if extra else "",
+            endpoint,
+            exc,
+            delay,
+            attempt,
+            max_attempts,
+        )
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:
