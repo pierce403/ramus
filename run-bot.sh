@@ -6,7 +6,10 @@ BOT_DIR="$ROOT_DIR/bot"
 VENV_DIR="$BOT_DIR/.venv"
 BRANCH="main"
 REMOTE="origin"
-CHECK_INTERVAL_SECONDS=60
+HEALTH_CHECK_SECONDS=30
+GIT_CHECK_INTERVAL_SECONDS=600
+RESTART_DELAY_SECONDS=60
+UPDATE_RESTART_DELAY_SECONDS=3
 LOCK_FILE=""
 LOCK_FD=200
 BOT_PID_FILE=""
@@ -189,10 +192,14 @@ main() {
   while true; do
     load_env
     if ! validate_env; then
-      log "Bot not started; retrying in ${CHECK_INTERVAL_SECONDS}s"
-      sleep "$CHECK_INTERVAL_SECONDS"
+      log "Bot not started; retrying in ${RESTART_DELAY_SECONDS}s"
+      sleep "$RESTART_DELAY_SECONDS"
       continue
     fi
+
+    local restart_reason="exit"
+    local last_git_check
+    last_git_check="$(date +%s)"
 
     run_bot &
     BOT_PID=$!
@@ -200,20 +207,31 @@ main() {
     echo "$BOT_PID" >"$BOT_PID_FILE"
 
     while kill -0 "$BOT_PID" 2>/dev/null; do
-      sleep "$CHECK_INTERVAL_SECONDS"
+      sleep "$HEALTH_CHECK_SECONDS"
       cleanup_stray_bots "$BOT_PID"
-      if pull_latest; then
-        log "Repo updated; restarting bot"
-        install_deps
-        kill "$BOT_PID" 2>/dev/null || true
-        wait "$BOT_PID" || true
-        break
+
+      local now
+      now="$(date +%s)"
+      if (( now - last_git_check >= GIT_CHECK_INTERVAL_SECONDS )); then
+        last_git_check="$now"
+        if pull_latest; then
+          log "Repo updated; restarting bot in ${UPDATE_RESTART_DELAY_SECONDS}s"
+          install_deps
+          kill "$BOT_PID" 2>/dev/null || true
+          wait "$BOT_PID" || true
+          restart_reason="update"
+          break
+        fi
       fi
     done
 
     if ! kill -0 "$BOT_PID" 2>/dev/null; then
-      log "Bot exited; restarting in ${CHECK_INTERVAL_SECONDS}s"
-      sleep "$CHECK_INTERVAL_SECONDS"
+      if [[ "$restart_reason" == "update" ]]; then
+        sleep "$UPDATE_RESTART_DELAY_SECONDS"
+      else
+        log "Bot exited; restarting in ${RESTART_DELAY_SECONDS}s"
+        sleep "$RESTART_DELAY_SECONDS"
+      fi
     fi
   done
 }
