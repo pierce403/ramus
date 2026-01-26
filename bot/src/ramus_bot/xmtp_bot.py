@@ -72,11 +72,12 @@ class XmtpBot:
                 text = str(ctx.message.content)
                 command = parse_command(text)
                 await self._announce_processing(ctx)
-                response = await self._handle_command(ctx, command)
+                response, use_persona = await self._handle_command(ctx, command)
                 setup_notice = self._setup_notice(ctx)
                 if setup_notice:
                     response = f"{setup_notice}\n\n{response}"
-                response = await self._apply_persona(response)
+                if use_persona and self.config.venice_api_key:
+                    response = await self._apply_persona(response)
                 await ctx.send_text(response)
                 await self._announce_sent(ctx)
             except Exception as exc:
@@ -732,45 +733,46 @@ class XmtpBot:
         preface = "I am Ramus, elder of the green. Hear these roots' counsel:"
         return f"{preface}\n{response}"
 
-    async def _handle_command(self, ctx, command: Command, allow_freeform: bool = True) -> str:
+    async def _handle_command(self, ctx, command: Command, allow_freeform: bool = True) -> tuple[str, bool]:
         if command.action.startswith("admin."):
             admin_response = await self._handle_admin_command(ctx, command)
             if admin_response is not None:
-                return admin_response
+                return admin_response, False
         if command.action == "help":
-            return help_text()
+            return help_text(), False
         if command.action == "status":
-            return self._handle_status()
+            return self._handle_status(), False
         if command.action == "settings":
-            return self._format_settings()
+            return self._format_settings(), False
         if command.action == "freeform":
             if not allow_freeform:
-                return help_text()
-            return await self._handle_freeform(ctx, command)
+                return help_text(), False
+            response, resolved = await self._handle_freeform(ctx, command)
+            return response, not resolved
         if command.action == "claims.count":
-            return self._handle_claims_count()
+            return self._handle_claims_count(), False
         if command.action == "claims.list":
-            return self._handle_claims_list()
+            return self._handle_claims_list(), False
         if command.action == "claims.review":
-            return self._handle_claims_review()
+            return self._handle_claims_review(), False
         if command.action == "claim.explain":
             claim_id = command.payload.get("claim_id")
-            return self._handle_claim_explain(claim_id)
+            return self._handle_claim_explain(claim_id), False
         if command.action == "admin.bounty.create":
-            return await self._handle_admin_bounty_create(ctx, command)
+            return await self._handle_admin_bounty_create(ctx, command), False
         if command.action == "admin.bounty.draft":
-            return await self._handle_admin_bounty_draft(ctx, command)
+            return await self._handle_admin_bounty_draft(ctx, command), False
         if command.action == "admin.bounty.publish":
-            return await self._handle_admin_bounty_publish(ctx, command)
+            return await self._handle_admin_bounty_publish(ctx, command), False
         if command.action == "admin.bounty.reject":
-            return await self._handle_admin_bounty_reject(ctx, command)
+            return await self._handle_admin_bounty_reject(ctx, command), False
         if command.action == "admin.claim.accept":
-            return await self._handle_admin_claim_accept(ctx, command)
+            return await self._handle_admin_claim_accept(ctx, command), False
         if command.action == "bounty.create":
-            return await self._handle_admin_bounty_create(ctx, command)
+            return await self._handle_admin_bounty_create(ctx, command), False
         if command.action == "bounty.draft":
-            return await self._handle_admin_bounty_draft(ctx, command)
-        return help_text()
+            return await self._handle_admin_bounty_draft(ctx, command), False
+        return help_text(), False
 
     def _load_claims(self):
         active = self.state.get_active_bounty()
@@ -832,16 +834,17 @@ class XmtpBot:
         reasons = ", ".join(breakdown.reasons)
         return f"Submission #{claim_id_int} scored {breakdown.total:.2f}. Reasons: {reasons}."
 
-    async def _handle_freeform(self, ctx, command: Command) -> str:
+    async def _handle_freeform(self, ctx, command: Command) -> tuple[str, bool]:
         text = str(command.payload.get("text", "")).strip()
         if not text:
-            return help_text()
+            return help_text(), False
         interpreted = await self._interpret_intent(text)
         if not interpreted:
-            return help_text()
+            return help_text(), False
         if interpreted.action in {"admin.bounty.draft", "bounty.draft"} and "raw" not in interpreted.payload:
             interpreted = Command(action=interpreted.action, payload={**interpreted.payload, "raw": text})
-        return await self._handle_command(ctx, interpreted, allow_freeform=False)
+        response, _ = await self._handle_command(ctx, interpreted, allow_freeform=False)
+        return response, True
 
     async def _interpret_intent(self, text: str) -> Command | None:
         if not self.config.venice_api_key:

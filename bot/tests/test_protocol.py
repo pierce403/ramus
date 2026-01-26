@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ramus_bot.protocol import parse_command
+from ramus_bot.protocol import parse_command, help_text
 
 
 def test_parse_settings_command() -> None:
@@ -30,3 +30,9 @@ def test_parse_auto_run_off_natural() -> None:
     command = parse_command("auto run off")
     assert command.action == "admin.set_auto_run"
     assert command.payload["enabled"] is False
+
+
+def test_help_text_does_not_include_examples() -> None:
+    text = help_text()
+    assert "admin text" not in text
+    assert "how many claims" not in text
