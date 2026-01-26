@@ -65,6 +65,7 @@ cd web && npm run build
 - `INFURA_API_KEY` is supported for Base mainnet only; XMTP command `set infura_key <key>` updates env + RPC URLs (restart required).
 - Help text now lists commands without "admin text" and ends with an "Operator only" line; persona only applies to non-command freeform when Venice is set.
 - Bounty creation is guarded by a shared lock via `StateStore.bounty_creation_guard()` to prevent multiple open/creating bounties.
+- `status` output includes wallet balance and environment config status (non-secret flags) via `bot/src/ramus_bot/xmtp_bot.py`.
 
 ## Rapport & Reflection
 

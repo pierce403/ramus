@@ -6,7 +6,7 @@ import json
 import os
 import re
 from datetime import datetime
-from dataclasses import replace
+from dataclasses import replace, dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -33,6 +33,14 @@ from .protocol import Command, help_text, parse_command
 from .runtime import RuntimeSettings
 from .wallet import rpc_context
 from .state import StateStore
+
+
+@dataclass(frozen=True)
+class _WalletStatus:
+    address: str
+    balance_wei: int | None
+    balance_line: str
+    rpc_line: str
 
 
 class XmtpBot:
@@ -524,7 +532,8 @@ class XmtpBot:
     def _format_settings(self) -> str:
         snapshot = self.runtime.snapshot()
         auto_run = "on" if snapshot.auto_run else "off"
-        reward_wei, reward_source = self._default_reward()
+        wallet_stats = self._wallet_stats()
+        reward_wei, reward_source = self._reward_from_snapshot(snapshot, wallet_stats.balance_wei)
         if reward_wei > 0:
             reward_eth = Web3.from_wei(reward_wei, "ether")
             reward_line = f"{reward_wei} wei (~{reward_eth} ETH) via {reward_source}"
@@ -543,8 +552,47 @@ class XmtpBot:
             f"- Auto-run: {auto_run}",
             f"- Bounty reward: {reward_line}",
             f"- AI scoring: {ai_line}",
+            "",
+            "Wallet:",
+            f"- Address: {wallet_stats.address}",
+            f"- Balance: {wallet_stats.balance_line}",
+            f"- RPC: {wallet_stats.rpc_line}",
+            "",
+            "Environment:",
+            f"- POIDH_RPC_URL: {self.config.poidh_rpc_url}",
+            f"- POIDH_CHAIN: {self.config.poidh_chain_slug} ({self.config.poidh_chain_id})",
+            f"- XMTP_ENV: {self.config.xmtp_env}",
+            f"- INFURA_API_KEY: {'set' if self.config.infura_api_key else 'not set'}",
+            f"- VENICE_API_KEY: {'set' if self.config.venice_api_key else 'not set'}",
+            f"- AI_SCORE_ENDPOINT: {'set' if self.config.ai_score_endpoint else 'not set'}",
         ]
         return "\n".join(lines)
+
+    def _reward_from_snapshot(self, snapshot: RuntimeSettings, balance_wei: int | None) -> tuple[int, str]:
+        if snapshot.bounty_reward_wei > 0:
+            source_labels = {
+                "wei": "BOUNTY_REWARD_WEI",
+                "eth": "BOUNTY_REWARD_ETH",
+            }
+            reward_source = source_labels.get(snapshot.bounty_reward_source, snapshot.bounty_reward_source)
+            return snapshot.bounty_reward_wei, reward_source
+        if balance_wei is None or balance_wei <= 0:
+            return 0, "auto (10% wallet)"
+        return balance_wei // 10, "auto (10% wallet)"
+
+    def _wallet_stats(self) -> "_WalletStatus":
+        address = self.poidh.wallet.address
+        try:
+            with rpc_context("checking wallet balance for status"):
+                balance = self.poidh.wallet.web3.eth.get_balance(address)
+            balance_eth = Web3.from_wei(balance, "ether")
+            balance_line = f"{balance} wei (~{balance_eth} ETH)"
+            rpc_line = "ok"
+            return _WalletStatus(address, balance, balance_line, rpc_line)
+        except Exception as exc:
+            balance_line = "unavailable"
+            rpc_line = f"error ({type(exc).__name__})"
+            return _WalletStatus(address, None, balance_line, rpc_line)
 
     def _default_reward(self) -> tuple[int, str]:
         snapshot = self.runtime.snapshot()
