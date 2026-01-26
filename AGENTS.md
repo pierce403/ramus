@@ -67,6 +67,7 @@ cd web && npm run build
 - Bounty creation is guarded by a shared lock via `StateStore.bounty_creation_guard()` to prevent multiple open/creating bounties.
 - `status` output includes wallet balance and environment config status (non-secret flags) via `bot/src/ramus_bot/xmtp_bot.py`.
 - On RPC 429s the bot enters a global cooldown and fails fast (no sleeping); callers get a RateLimitError message from `bot/src/ramus_bot/wallet.py`.
+- Venice responses stream to stdout when available (see `_stream_venice` in `bot/src/ramus_bot/xmtp_bot.py`).
 
 ## Rapport & Reflection
 

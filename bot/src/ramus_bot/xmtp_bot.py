@@ -760,6 +760,9 @@ class XmtpBot:
             "Content-Type": "application/json",
         }
         try:
+            streamed = await self._stream_venice(payload, headers, label="persona")
+            if streamed:
+                return streamed
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
                     f"{self.config.venice_base_url.rstrip('/')}/chat/completions",
@@ -804,6 +807,9 @@ class XmtpBot:
             "Content-Type": "application/json",
         }
         try:
+            streamed = await self._stream_venice(payload, headers, label="ramus")
+            if streamed:
+                return streamed
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
                     f"{self.config.venice_base_url.rstrip('/')}/chat/completions",
@@ -822,6 +828,47 @@ class XmtpBot:
         except Exception as exc:
             logger.warning("Persona chat failed: {}", exc)
         return None
+
+    async def _stream_venice(self, payload: dict, headers: dict[str, str], label: str) -> str | None:
+        stream_payload = {**payload, "stream": True}
+        url = f"{self.config.venice_base_url.rstrip('/')}/chat/completions"
+        content_parts: list[str] = []
+        started = False
+        print(f"[ramus] streaming {label}: ", end="", flush=True)
+        try:
+            timeout = httpx.Timeout(10.0, read=60.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with client.stream("POST", url, json=stream_payload, headers=headers) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line:
+                            continue
+                        if line.startswith("data:"):
+                            data = line[len("data:"):].strip()
+                            if data == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data)
+                            except json.JSONDecodeError:
+                                continue
+                            delta = (
+                                chunk.get("choices", [{}])[0]
+                                .get("delta", {})
+                                .get("content", "")
+                            )
+                            if delta:
+                                started = True
+                                content_parts.append(delta)
+                                print(delta, end="", flush=True)
+        except Exception as exc:
+            if started:
+                print("", flush=True)
+            logger.warning("Venice streaming failed: {}", exc)
+            return None
+        if started:
+            print("", flush=True)
+        content = "".join(content_parts).strip()
+        return content or None
 
     async def _handle_command(self, ctx, command: Command, allow_freeform: bool = True) -> tuple[str, bool]:
         if command.action.startswith("admin."):
