@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from contextlib import contextmanager
-import random
 import threading
 import time
 
@@ -66,6 +65,8 @@ class RetryingHTTPProvider(HTTPProvider):
         max_retries: int = 3,
         backoff_seconds: float = 1.0,
         max_backoff_seconds: float = 30.0,
+        rate_limit_base_seconds: float = 600.0,
+        rate_limit_reset_seconds: float = 3600.0,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -74,9 +75,10 @@ class RetryingHTTPProvider(HTTPProvider):
         self._max_backoff_seconds = max_backoff_seconds
         self._rate_limit_lock = threading.Lock()
         self._rate_limit_until = 0.0
-        self._rate_limit_attempts = 0
+        self._rate_limit_level = 0
         self._last_rate_limit_time = 0.0
-        self._rate_limit_reset_seconds = 30.0
+        self._rate_limit_base_seconds = rate_limit_base_seconds
+        self._rate_limit_reset_seconds = rate_limit_reset_seconds
 
     def make_request(self, method, params):  # type: ignore[override]
         for attempt in range(1, self._max_retries + 1):
@@ -86,12 +88,14 @@ class RetryingHTTPProvider(HTTPProvider):
             except Exception as exc:
                 if not _is_rate_limit_error(exc) or attempt >= self._max_retries:
                     raise
-                delay = self._register_rate_limit()
+                delay, level, until = self._register_rate_limit()
                 self._log_rate_limit(
                     method,
                     params,
                     exc,
                     delay,
+                    level,
+                    until,
                     attempt,
                     self._max_retries,
                 )
@@ -101,6 +105,7 @@ class RetryingHTTPProvider(HTTPProvider):
         with self._rate_limit_lock:
             now = time.time()
             wait_seconds = max(0.0, self._rate_limit_until - now)
+            level = self._rate_limit_level
         if wait_seconds > 0:
             context = _describe_rpc_method(method)
             detail = f"{context} ({method})" if context else str(method)
@@ -109,7 +114,8 @@ class RetryingHTTPProvider(HTTPProvider):
             op_context = _current_rpc_context()
             op_prefix = f"{op_context}: " if op_context else ""
             logger.warning(
-                "RPC globally rate limited before {}{}{} on {}. Waiting {:.1f}s",
+                "RPC globally rate limited (level {}) before {}{}{} on {}. Waiting {:.1f}s",
+                level,
                 op_prefix,
                 detail,
                 f" [{extra}]" if extra else "",
@@ -118,37 +124,45 @@ class RetryingHTTPProvider(HTTPProvider):
             )
             time.sleep(wait_seconds)
 
-    def _register_rate_limit(self) -> float:
+    def _register_rate_limit(self) -> tuple[float, int, float]:
         now = time.time()
         with self._rate_limit_lock:
             if now - self._last_rate_limit_time > self._rate_limit_reset_seconds:
-                self._rate_limit_attempts = 0
+                self._rate_limit_level = 0
             self._last_rate_limit_time = now
-            self._rate_limit_attempts += 1
-            delay = min(
-                self._backoff_seconds * (2 ** (self._rate_limit_attempts - 1)),
-                self._max_backoff_seconds,
-            )
-            jitter = random.uniform(0, delay * 0.25)
-            total_delay = delay + jitter
-            self._rate_limit_until = max(self._rate_limit_until, now + total_delay)
-            return total_delay
+            self._rate_limit_level += 1
+            delay = self._rate_limit_base_seconds * (2 ** (self._rate_limit_level - 1))
+            self._rate_limit_until = max(self._rate_limit_until, now + delay)
+            return delay, self._rate_limit_level, self._rate_limit_until
 
-    def _log_rate_limit(self, method, params, exc: Exception, delay: float, attempt: int, max_attempts: int) -> None:
+    def _log_rate_limit(
+        self,
+        method,
+        params,
+        exc: Exception,
+        delay: float,
+        level: int,
+        until: float,
+        attempt: int,
+        max_attempts: int,
+    ) -> None:
         context = _describe_rpc_method(method)
         detail = f"{context} ({method})" if context else str(method)
         extra = _describe_rpc_params(method, params)
         endpoint = getattr(self, "endpoint_uri", None) or "RPC"
         op_context = _current_rpc_context()
         op_prefix = f"{op_context}: " if op_context else ""
+        until_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(until))
         logger.warning(
-            "RPC rate limited during {}{}{} on {} ({}). Backing off {:.1f}s (attempt {}/{})",
+            "RPC rate limited during {}{}{} on {} ({}). Backing off {:.0f}s (level {}, until {}) (attempt {}/{})",
             op_prefix,
             detail,
             f" [{extra}]" if extra else "",
             endpoint,
             exc,
             delay,
+            level,
+            until_iso,
             attempt,
             max_attempts,
         )
@@ -193,7 +207,14 @@ def _describe_rpc_params(method: str, params) -> str:
 
 
 def init_wallet(config: BotConfig) -> BotWallet:
-    provider = RetryingHTTPProvider(config.poidh_rpc_url, max_retries=5, backoff_seconds=1.5)
+    provider = RetryingHTTPProvider(
+        config.poidh_rpc_url,
+        max_retries=5,
+        backoff_seconds=1.5,
+        max_backoff_seconds=30.0,
+        rate_limit_base_seconds=600.0,
+        rate_limit_reset_seconds=3600.0,
+    )
     web3 = Web3(provider)
     if not web3.is_connected():
         raise WalletError("Failed to connect to RPC")
