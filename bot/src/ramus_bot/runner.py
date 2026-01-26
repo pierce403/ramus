@@ -13,6 +13,7 @@ from .models import BountySpec, Decision
 from .poidh.client import PoidhClient
 from .state import StateStore
 from .runtime import RuntimeSettings
+from .wallet import rpc_context
 
 
 @dataclass(frozen=True)
@@ -117,7 +118,8 @@ class BotRunner:
         return self.poidh.create_bounty(spec)
 
     def _has_sufficient_balance(self, reward_wei: int) -> bool:
-        balance = self.poidh.wallet.web3.eth.get_balance(self.poidh.wallet.address)
+        with rpc_context("checking wallet balance for auto bounty"):
+            balance = self.poidh.wallet.web3.eth.get_balance(self.poidh.wallet.address)
         if balance < reward_wei:
             logger.warning(
                 "Insufficient wallet balance for bounty reward. Balance={} wei, reward={} wei.",
@@ -131,7 +133,8 @@ class BotRunner:
         if settings.bounty_reward_wei > 0:
             return settings.bounty_reward_wei
         try:
-            balance = self.poidh.wallet.web3.eth.get_balance(self.poidh.wallet.address)
+            with rpc_context("checking wallet balance for default reward"):
+                balance = self.poidh.wallet.web3.eth.get_balance(self.poidh.wallet.address)
         except Exception as exc:
             logger.warning("Failed to read wallet balance for auto reward: {}", exc)
             return 0

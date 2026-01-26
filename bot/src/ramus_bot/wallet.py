@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextlib import contextmanager
 import random
+import threading
 import time
 
 from web3 import Web3
@@ -40,6 +42,23 @@ class WalletError(RuntimeError):
     pass
 
 
+_rpc_context = threading.local()
+
+
+@contextmanager
+def rpc_context(label: str):
+    previous = getattr(_rpc_context, "label", None)
+    _rpc_context.label = label
+    try:
+        yield
+    finally:
+        _rpc_context.label = previous
+
+
+def _current_rpc_context() -> str | None:
+    return getattr(_rpc_context, "label", None)
+
+
 class RetryingHTTPProvider(HTTPProvider):
     def __init__(
         self,
@@ -67,8 +86,11 @@ class RetryingHTTPProvider(HTTPProvider):
                 detail = f"{context} ({method})" if context else str(method)
                 extra = _describe_rpc_params(method, params)
                 endpoint = getattr(self, "endpoint_uri", None) or "RPC"
+                op_context = _current_rpc_context()
+                op_prefix = f"{op_context}: " if op_context else ""
                 logger.warning(
-                    "RPC rate limited during {}{} on {} ({}). Retrying in {:.1f}s (attempt {}/{})",
+                    "RPC rate limited during {}{}{} on {} ({}). Retrying in {:.1f}s (attempt {}/{})",
+                    op_prefix,
                     detail,
                     f" [{extra}]" if extra else "",
                     endpoint,

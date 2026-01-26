@@ -31,6 +31,7 @@ from .models import BountyDraft, BountySpec, Decision
 from .poidh.client import PoidhClient
 from .protocol import Command, help_text, parse_command
 from .runtime import RuntimeSettings
+from .wallet import rpc_context
 from .state import StateStore
 
 
@@ -548,7 +549,8 @@ class XmtpBot:
             reward_source = source_labels.get(snapshot.bounty_reward_source, snapshot.bounty_reward_source)
             return snapshot.bounty_reward_wei, reward_source
         try:
-            balance = self.poidh.wallet.web3.eth.get_balance(self.poidh.wallet.address)
+            with rpc_context("checking wallet balance for settings"):
+                balance = self.poidh.wallet.web3.eth.get_balance(self.poidh.wallet.address)
         except Exception:
             return 0, "auto (10% wallet)"
         if balance <= 0:
