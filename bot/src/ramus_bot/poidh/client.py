@@ -8,7 +8,7 @@ from web3 import Web3
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..config import BotConfig
-from ..models import BountySpec, Claim
+from ..models import Bounty, BountySpec, Claim
 from ..wallet import BotWallet, rpc_context
 from .contracts import POIDH_CHAIN_CONFIG, POIDH_MINIMAL_ABI
 
@@ -77,6 +77,21 @@ class PoidhClient:
             return claims
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10), reraise=True)
+    def fetch_bounties(self) -> list[Bounty]:
+        with rpc_context("fetching bounties"):
+            contract = self._contract()
+            bounties: list[Bounty] = []
+            offset = 0
+            while True:
+                chunk = contract.functions.getBounties(offset).call()
+                if not chunk:
+                    break
+                for raw in chunk:
+                    bounties.append(self._parse_bounty(raw))
+                offset += len(chunk)
+            return bounties
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10), reraise=True)
     def accept_claim(self, bounty_id: int, claim_id: int) -> str:
         with rpc_context(f"accepting claim (bounty {bounty_id}, claim {claim_id})"):
             contract = self._contract()
@@ -102,4 +117,17 @@ class PoidhClient:
             description=str(raw[5]),
             created_at=datetime.utcfromtimestamp(int(raw[6])),
             accepted=bool(raw[7]),
+        )
+
+    @staticmethod
+    def _parse_bounty(raw: Iterable) -> Bounty:
+        return Bounty(
+            bounty_id=int(raw[0]),
+            issuer=Web3.to_checksum_address(raw[1]),
+            title=str(raw[2]),
+            description=str(raw[3]),
+            amount_wei=int(raw[4]),
+            claimer=Web3.to_checksum_address(raw[5]),
+            created_at=datetime.utcfromtimestamp(int(raw[6])),
+            claim_id=int(raw[7]),
         )

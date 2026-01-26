@@ -69,7 +69,7 @@ cd web && npm run build
 - `status` output includes wallet balance and environment config status (non-secret flags) via `bot/src/ramus_bot/xmtp_bot.py`.
 - On RPC 429s the bot enters a global cooldown and fails fast (no sleeping); callers get a RateLimitError message from `bot/src/ramus_bot/wallet.py`.
 - Venice responses stream to stdout when available (see `_stream_venice` in `bot/src/ramus_bot/xmtp_bot.py`).
-- Added `bounties` command to list stored bounties with links (`bot/src/ramus_bot/xmtp_bot.py` + `StateStore.list_bounties`).
+- Added `bounties` command to list onchain bounties with title/description via `PoidhClient.fetch_bounties()` and `getBounties` ABI.
 
 ## Rapport & Reflection
 

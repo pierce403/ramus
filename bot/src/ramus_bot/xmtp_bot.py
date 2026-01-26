@@ -930,15 +930,25 @@ class XmtpBot:
         return f"Claims for bounty {active.bounty_id}: {ids}."
 
     def _handle_bounties_list(self) -> str:
-        bounties = self.state.list_bounties()
+        try:
+            bounties = self.poidh.fetch_bounties()
+        except Exception as exc:
+            logger.exception("Failed to fetch bounties")
+            return self._format_error_for_user(exc)
         if not bounties:
-            return "No bounties recorded yet."
-        lines = ["Bounties:"]
+            return "No bounties found onchain."
+        lines = ["Bounties (onchain):"]
         base = self.config.poidh_app_base.rstrip("/")
         for bounty in bounties:
             url = f"{base}/bounty/{bounty.bounty_id}"
             created = bounty.created_at.isoformat()
-            lines.append(f"- {bounty.bounty_id} ({bounty.status}, {created}) {url}")
+            title = bounty.title.strip() or "Untitled"
+            description = bounty.description.strip()
+            if len(description) > 200:
+                description = f"{description[:197]}..."
+            lines.append(
+                f"- {bounty.bounty_id} ({created}) {title} — {description} {url}"
+            )
         return "\n".join(lines)
 
     def _handle_claims_review(self) -> str:

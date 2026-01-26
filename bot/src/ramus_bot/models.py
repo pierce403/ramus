@@ -40,3 +40,15 @@ class Decision:
     winner_claim_id: int | None
     reasoning: str
     scores: dict[int, float]
+
+
+@dataclass(frozen=True)
+class Bounty:
+    bounty_id: int
+    issuer: str
+    title: str
+    description: str
+    amount_wei: int
+    claimer: str
+    created_at: datetime
+    claim_id: int
