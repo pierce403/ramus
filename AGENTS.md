@@ -51,6 +51,7 @@ cd web && npm run build
 - POIDH `createSoloBounty`/`createOpenBounty` on Base reverts below ~`0.001 ETH` (custom error `0x0fa2e38d` seen). With default 10% reward, wallet balance must be ≥`0.01 ETH` to pass.
 - POIDH `getBounties(offset)` returns a fixed chunk (10 entries) even past the end, so `fetch_bounties` must bound by `getBountiesLength()` (fixed in `bot/src/ramus_bot/poidh/client.py`).
 - POIDH v3 bounties on Base are not yet shown on `poidh.xyz` (tRPC returns v2 data for `chainId=8453`). Repro: `curl 'https://poidh.xyz/api/trpc/bounties.fetch?...'` with `{id:13,chainId:8453}` returns the “Take a pic of a parking lot” bounty even though v3 contract `0x5555Fa...` has `bountyId=13` issued by `0xD25D...`.
+- POIDH v3 deployment docs list mainnet contracts: Base/Arbitrum `0x5555Fa783936C260f77385b4E153B9725feF1719`, Degen `0x18E5585ca7cE31b90Bc8BB7aAf84152857cE243f` (deployed Jan-19-2026), with Base min bounty `0.001 ETH` (see `https://docs.poidh.xyz/deployment.html`).
 
 ## Dependencies
 
