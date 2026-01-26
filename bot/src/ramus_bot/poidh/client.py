@@ -29,7 +29,12 @@ class PoidhClient:
         signed = self.wallet.web3.eth.account.sign_transaction(
             txn, private_key=self.config.wallet_private_key
         )
-        tx_hash = self.wallet.web3.eth.send_raw_transaction(signed.rawTransaction)
+        raw_tx = getattr(signed, "rawTransaction", None)
+        if raw_tx is None:
+            raw_tx = getattr(signed, "raw_transaction", None)
+        if raw_tx is None:
+            raise AttributeError("Signed transaction missing raw transaction bytes.")
+        tx_hash = self.wallet.web3.eth.send_raw_transaction(raw_tx)
         receipt = self.wallet.web3.eth.wait_for_transaction_receipt(tx_hash)
         return receipt
 

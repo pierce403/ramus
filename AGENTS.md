@@ -60,6 +60,7 @@ cd web && npm run build
 - Runtime toggles (`AUTO_RUN`, bounty reward) are shared via `bot/src/ramus_bot/runtime.py` and can be updated over XMTP.
 - If no bounty reward is set, the bot uses ~10% of the wallet balance as the default reward (auto-run + admin defaults).
 - XMTP responses now emit stdout markers when processing/sent (`bot/src/ramus_bot/xmtp_bot.py`).
+- Web3 SignedTransaction uses `raw_transaction` in newer versions; `bot/src/ramus_bot/poidh/client.py` now handles both `rawTransaction` and `raw_transaction`.
 
 ## Rapport & Reflection
 
