@@ -42,7 +42,7 @@ cd web && npm run build
 ## Dependencies
 
 - Python: xmtp-py, POIDH client/API, wallet tooling
-- Web: React + TypeScript, XMTP browser SDK
+- Web: React + TypeScript, XMTP browser SDK (>=6.1.2 to avoid unsupported libxmtp errors)
 - Add versions when confirmed.
 
 ## Deployment Notes

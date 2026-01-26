@@ -3,6 +3,7 @@ import {
   Client,
   ConsentState,
   DecodedMessage,
+  IdentifierKind,
   type Conversation,
   type Signer,
 } from "@xmtp/browser-sdk";
@@ -36,7 +37,7 @@ async function createSigner(): Promise<Signer> {
   const address = wallet.address.toLowerCase();
   return {
     type: "EOA",
-    getIdentifier: () => ({ identifier: address, identifierKind: "Ethereum" }),
+    getIdentifier: () => ({ identifier: address, identifierKind: IdentifierKind.Ethereum }),
     signMessage: async (message: string) => {
       const signature = await wallet.signMessage(message);
       return getBytes(signature);
@@ -87,11 +88,11 @@ export default function ChatPanel() {
     setStatus("connecting");
     const signer = await createSigner();
     const key = getOrCreateEncryptionKey();
-    const newClient = await Client.create(signer, key, { env: XMTP_ENV });
+    const newClient = await Client.create(signer, { env: XMTP_ENV, dbEncryptionKey: key });
     const botIdentifier = await resolveBotIdentifier();
-    const dm = await newClient.conversations.newDmWithIdentifier({
+    const dm = await newClient.conversations.createDmWithIdentifier({
       identifier: botIdentifier,
-      identifierKind: "Ethereum",
+      identifierKind: IdentifierKind.Ethereum,
     });
     const consent = await dm.consentState();
     if (consent !== ConsentState.Allowed) {
@@ -108,7 +109,7 @@ export default function ChatPanel() {
     if (!conversation || !input.trim()) {
       return;
     }
-    await conversation.send(input.trim());
+    await conversation.sendText(input.trim());
     setInput("");
   }, [conversation, input]);
 
