@@ -885,6 +885,8 @@ class XmtpBot:
             return self._handle_claims_list(), False
         if command.action == "claims.review":
             return self._handle_claims_review(), False
+        if command.action == "bounties.list":
+            return self._handle_bounties_list(), False
         if command.action == "claim.explain":
             claim_id = command.payload.get("claim_id")
             return self._handle_claim_explain(claim_id), False
@@ -926,6 +928,18 @@ class XmtpBot:
             return f"No claims yet for bounty {active.bounty_id}."
         ids = ", ".join(str(claim.claim_id) for claim in claims)
         return f"Claims for bounty {active.bounty_id}: {ids}."
+
+    def _handle_bounties_list(self) -> str:
+        bounties = self.state.list_bounties()
+        if not bounties:
+            return "No bounties recorded yet."
+        lines = ["Bounties:"]
+        base = self.config.poidh_app_base.rstrip("/")
+        for bounty in bounties:
+            url = f"{base}/bounty/{bounty.bounty_id}"
+            created = bounty.created_at.isoformat()
+            lines.append(f"- {bounty.bounty_id} ({bounty.status}, {created}) {url}")
+        return "\n".join(lines)
 
     def _handle_claims_review(self) -> str:
         active, claims = self._load_claims()

@@ -37,3 +37,8 @@ def test_help_text_does_not_include_examples() -> None:
     assert "admin text" not in text
     assert "how many claims" not in text
     assert "Operator only:" in text
+
+
+def test_parse_bounties_command() -> None:
+    command = parse_command("bounties")
+    assert command.action == "bounties.list"

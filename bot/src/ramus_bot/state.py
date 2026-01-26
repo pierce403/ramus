@@ -45,6 +45,9 @@ class StateStore:
     def record_payout(self, bounty_id: int, claim_id: int, tx_hash: str) -> None:
         raise NotImplementedError
 
+    def list_bounties(self) -> list[BountyRecord]:
+        raise NotImplementedError
+
     def save_bounty_draft(self, draft: BountyDraft) -> None:
         raise NotImplementedError
 
@@ -103,6 +106,11 @@ class MemoryStateStore(StateStore):
 
     def record_payout(self, bounty_id: int, claim_id: int, tx_hash: str) -> None:
         return None
+
+    def list_bounties(self) -> list[BountyRecord]:
+        if not self._bounty:
+            return []
+        return [self._bounty]
 
     def save_bounty_draft(self, draft: BountyDraft) -> None:
         self._draft = draft
@@ -343,6 +351,26 @@ class SQLiteStateStore(StateStore):
                 (bounty_id, claim_id, tx_hash, datetime.utcnow().isoformat()),
             )
             self._conn.commit()
+
+    def list_bounties(self) -> list[BountyRecord]:
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                SELECT bounty_id, created_at, status
+                FROM bounties
+                ORDER BY created_at DESC
+                """
+            )
+            rows = cursor.fetchall()
+            return [
+                BountyRecord(
+                    bounty_id=row["bounty_id"],
+                    created_at=datetime.fromisoformat(row["created_at"]),
+                    status=row["status"],
+                )
+                for row in rows
+            ]
 
     def save_bounty_draft(self, draft: BountyDraft) -> None:
         with self._lock:

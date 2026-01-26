@@ -20,6 +20,8 @@ def parse_command(text: str) -> Command:
         return Command(action="status", payload={})
     if lowered in {"settings", "config", "configuration", "toggles"}:
         return Command(action="settings", payload={})
+    if lowered in {"bounties", "list bounties", "list bounty", "bounty list"}:
+        return Command(action="bounties.list", payload={})
 
     reward_match = re.search(
         r"(?:^|\s)set\s+(?:bounty\s+)?reward\s+([0-9]*\.?[0-9]+)\s*(eth|wei)\b",
@@ -109,6 +111,9 @@ def parse_command(text: str) -> Command:
     if "list" in lowered and "claim" in lowered:
         return Command(action="claims.list", payload={})
 
+    if "list" in lowered and "bount" in lowered:
+        return Command(action="bounties.list", payload={})
+
     if "look good" in lowered or "best" in lowered or "top" in lowered:
         if "claim" in lowered or "submission" in lowered:
             return Command(action="claims.review", payload={})
@@ -121,6 +126,7 @@ def help_text() -> str:
         "Ramus commands:\n"
         "- status\n"
         "- settings\n"
+        "- bounties\n"
         "- help\n"
         "\n"
         "Operator only:\n"
