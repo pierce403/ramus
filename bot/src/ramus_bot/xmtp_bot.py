@@ -63,14 +63,22 @@ class XmtpBot:
         @agent.on("text")
         async def on_text(ctx) -> None:  # type: ignore[override]
             await self._log_incoming_message(ctx)
-            text = str(ctx.message.content)
-            command = parse_command(text)
-            response = await self._handle_command(ctx, command)
-            setup_notice = self._setup_notice(ctx)
-            if setup_notice:
-                response = f"{setup_notice}\n\n{response}"
-            response = await self._apply_persona(response)
-            await ctx.send_text(response)
+            try:
+                text = str(ctx.message.content)
+                command = parse_command(text)
+                response = await self._handle_command(ctx, command)
+                setup_notice = self._setup_notice(ctx)
+                if setup_notice:
+                    response = f"{setup_notice}\n\n{response}"
+                response = await self._apply_persona(response)
+                await ctx.send_text(response)
+            except Exception as exc:
+                logger.exception("XMTP message handling failed")
+                fallback = self._format_error_for_user(exc)
+                try:
+                    await ctx.send_text(fallback)
+                except Exception:
+                    logger.exception("Failed to send error response over XMTP")
 
         logger.info("Starting XMTP agent")
         await agent.start()
@@ -100,6 +108,18 @@ class XmtpBot:
         return (
             "Setup note: this bot is missing optional config values. "
             f"Operator should set {missing_list} in the bot environment."
+        )
+
+    def _format_error_for_user(self, exc: Exception) -> str:
+        message = str(exc).strip()
+        if not message:
+            message = exc.__class__.__name__
+        if len(message) > 160:
+            message = f"{message[:157]}..."
+        return (
+            "Ramus stumbled while tending this request. "
+            f"Error: {exc.__class__.__name__}: {message} "
+            "Please try again or check logs."
         )
 
     async def _log_incoming_message(self, ctx) -> None:
@@ -842,7 +862,11 @@ class XmtpBot:
             return "Set a positive bounty reward (BOUNTY_REWARD_WEI/ETH) before publishing."
 
         spec = BountySpec(title=draft.title, description=draft.description, reward_wei=reward_wei)
-        bounty_id = self.poidh.create_bounty(spec)
+        try:
+            bounty_id = self.poidh.create_bounty(spec)
+        except Exception as exc:
+            logger.exception("Bounty publish failed")
+            return self._format_error_for_user(exc)
         self.state.create_bounty(bounty_id)
         self.state.clear_bounty_draft()
         bounty_url = f"{self.config.poidh_app_base.rstrip('/')}/bounty/{bounty_id}"
@@ -882,7 +906,11 @@ class XmtpBot:
             return "Set a positive bounty reward (BOUNTY_REWARD_WEI/ETH) before creating a bounty."
 
         spec = BountySpec(title=title, description=description, reward_wei=reward_wei_int)
-        bounty_id = self.poidh.create_bounty(spec)
+        try:
+            bounty_id = self.poidh.create_bounty(spec)
+        except Exception as exc:
+            logger.exception("Bounty create failed")
+            return self._format_error_for_user(exc)
         self.state.create_bounty(bounty_id)
         return f"Created bounty {bounty_id}."
 
@@ -913,7 +941,11 @@ class XmtpBot:
         )
         self.state.record_decision(decision)
         write_decision_report(decision, claims, self.config.audit_dir)
-        tx_hash = self.poidh.accept_claim(active.bounty_id, claim_id_int)
+        try:
+            tx_hash = self.poidh.accept_claim(active.bounty_id, claim_id_int)
+        except Exception as exc:
+            logger.exception("Claim acceptance failed")
+            return self._format_error_for_user(exc)
         self.state.record_payout(active.bounty_id, claim_id_int, tx_hash)
         self.state.mark_bounty_closed(active.bounty_id)
         return f"Accepted claim #{claim_id_int} for bounty {active.bounty_id}. Tx: {tx_hash}"
