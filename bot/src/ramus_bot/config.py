@@ -12,6 +12,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class BotConfig:
     poidh_api_base: str
+    poidh_app_base: str
     poidh_chain_id: int
     poidh_chain_slug: str
     poidh_rpc_url: str
@@ -128,6 +129,7 @@ def load_config() -> BotConfig:
     bounty_reward_wei = _parse_bounty_reward()
     return BotConfig(
         poidh_api_base=os.getenv("POIDH_API_BASE", "https://api.poidh.xyz"),
+        poidh_app_base=os.getenv("POIDH_APP_BASE", "https://poidh.xyz"),
         poidh_chain_id=int(os.getenv("POIDH_CHAIN_ID", "8453")),
         poidh_chain_slug=os.getenv("POIDH_CHAIN_SLUG", "base"),
         poidh_rpc_url=os.getenv("POIDH_RPC_URL", "https://mainnet.base.org"),

@@ -18,7 +18,20 @@ def parse_command(text: str) -> Command:
         return Command(action="help", payload={})
     if lowered in {"status", "state"}:
         return Command(action="status", payload={})
-    if "bounty" in lowered and any(term in lowered for term in ("create", "make", "new")):
+    if "bounty" in lowered and (
+        "draft" in lowered
+        or "idea" in lowered
+        or "suggest" in lowered
+        or "propose" in lowered
+        or "come up" in lowered
+        or "new bounty" in lowered
+    ):
+        return Command(action="admin.bounty.draft", payload={"raw": stripped})
+    if "bounty" in lowered and any(term in lowered for term in ("approve", "publish", "launch", "post")):
+        return Command(action="admin.bounty.publish", payload={})
+    if "bounty" in lowered and any(term in lowered for term in ("reject", "discard", "cancel")):
+        return Command(action="admin.bounty.reject", payload={})
+    if "bounty" in lowered and any(term in lowered for term in ("create", "make")):
         return Command(action="admin.bounty.create", payload={"raw": stripped})
     if tokens and tokens[0] in {"set", "admin"}:
         idx = 1 if tokens[0] == "set" else 2
@@ -63,6 +76,9 @@ def help_text() -> str:
         "- help\n"
         "- admin text: set venice_key <key>\n"
         "- admin text: set venice_model <model>\n"
+        "- admin text: draft bounty\n"
+        "- admin text: approve bounty\n"
+        "- admin text: reject bounty\n"
         "- admin text: make bounty\n"
         "- admin text: select winner #3\n"
         "- ask: how many claims have been submitted?\n"

@@ -14,6 +14,15 @@ class BountySpec:
 
 
 @dataclass(frozen=True)
+class BountyDraft:
+    title: str
+    description: str
+    reward_wei: int
+    created_at: datetime
+    source_text: str | None = None
+
+
+@dataclass(frozen=True)
 class Claim:
     claim_id: int
     bounty_id: int

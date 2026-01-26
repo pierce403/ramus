@@ -5,6 +5,7 @@ import inspect
 import json
 import os
 import re
+from datetime import datetime
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -25,7 +26,7 @@ from .audit import write_decision_report
 from .config import BotConfig
 from .ens_utils import namehash, resolve_ens_via_registry
 from .evaluator import Evaluator, ScoreBreakdown
-from .models import BountySpec, Decision
+from .models import BountyDraft, BountySpec, Decision
 from .poidh.client import PoidhClient
 from .protocol import Command, help_text, parse_command
 from .state import StateStore
@@ -542,7 +543,6 @@ class XmtpBot:
             admin_response = await self._handle_admin_command(ctx, command)
             if admin_response is not None:
                 return admin_response
-            return help_text()
         if command.action == "help":
             return help_text()
         if command.action == "status":
@@ -565,10 +565,18 @@ class XmtpBot:
             return self._handle_claim_explain(claim_id)
         if command.action == "admin.bounty.create":
             return await self._handle_admin_bounty_create(ctx, command)
+        if command.action == "admin.bounty.draft":
+            return await self._handle_admin_bounty_draft(ctx, command)
+        if command.action == "admin.bounty.publish":
+            return await self._handle_admin_bounty_publish(ctx, command)
+        if command.action == "admin.bounty.reject":
+            return await self._handle_admin_bounty_reject(ctx, command)
         if command.action == "admin.claim.accept":
             return await self._handle_admin_claim_accept(ctx, command)
         if command.action == "bounty.create":
             return await self._handle_admin_bounty_create(ctx, command)
+        if command.action == "bounty.draft":
+            return await self._handle_admin_bounty_draft(ctx, command)
         return help_text()
 
     def _load_claims(self):
@@ -638,6 +646,8 @@ class XmtpBot:
         interpreted = await self._interpret_intent(text)
         if not interpreted:
             return help_text()
+        if interpreted.action in {"admin.bounty.draft", "bounty.draft"} and "raw" not in interpreted.payload:
+            interpreted = Command(action=interpreted.action, payload={**interpreted.payload, "raw": text})
         return await self._handle_command(ctx, interpreted, allow_freeform=False)
 
     async def _interpret_intent(self, text: str) -> Command | None:
@@ -652,6 +662,9 @@ class XmtpBot:
             "- claims.review\n"
             "- claim.explain (requires claim_id)\n"
             "- admin.bounty.create (optional title, description, reward_wei)\n"
+            "- admin.bounty.draft (optional raw prompt)\n"
+            "- admin.bounty.publish\n"
+            "- admin.bounty.reject\n"
             "- admin.claim.accept (requires claim_id)\n"
             "- admin.set_venice_key (requires key)\n"
             "- admin.set_venice_model (requires model)\n"
@@ -712,6 +725,137 @@ class XmtpBot:
                 return json.loads(match.group(0))
             except json.JSONDecodeError:
                 return None
+
+    async def _draft_bounty_with_venice(self, text: str) -> BountyDraft | None:
+        if not self.config.venice_api_key:
+            return None
+
+        prompt = (
+            "You are drafting a real-world cleanup bounty for POIDH. "
+            "Return JSON with keys: title, description, reward_wei (optional). "
+            "Title should be short (<= 80 chars). Description should include concrete proof "
+            "requirements (before/after photos). Do not include markdown. "
+            "If reward_wei is omitted, we'll use the default.\n\n"
+            f"Operator prompt: {text or 'Create a new cleanup bounty for public green spaces.'}"
+        )
+        payload = {
+            "model": self.config.venice_model,
+            "messages": [
+                {"role": "system", "content": "Return JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.4,
+            "max_tokens": 220,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.config.venice_api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=12) as client:
+                resp = await client.post(
+                    f"{self.config.venice_base_url.rstrip('/')}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                content = (
+                    data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                )
+            parsed = self._parse_json_from_text(str(content))
+            if not parsed:
+                return None
+            title = str(parsed.get("title", "")).strip() or "Clean a local green space"
+            description = str(parsed.get("description", "")).strip()
+            if not description:
+                description = (
+                    "Pick up trash in a nearby park or green space and share before/after photos."
+                )
+            reward_wei = parsed.get("reward_wei")
+            try:
+                reward_wei_int = int(reward_wei)
+            except (TypeError, ValueError):
+                reward_wei_int = 0
+            if reward_wei_int <= 0:
+                reward_wei_int = self.config.bounty_reward_wei
+            return BountyDraft(
+                title=title,
+                description=description,
+                reward_wei=reward_wei_int,
+                created_at=datetime.utcnow(),
+                source_text=text or None,
+            )
+        except Exception as exc:
+            logger.warning("Venice bounty draft failed: {}", exc)
+            return None
+
+    def _format_bounty_draft(self, draft: BountyDraft) -> str:
+        reward_wei = draft.reward_wei
+        reward_line = "Reward: not set"
+        if reward_wei > 0:
+            reward_eth = Web3.from_wei(reward_wei, "ether")
+            reward_line = f"Reward: {reward_wei} wei (~{reward_eth} ETH)"
+        lines = [
+            "Bounty draft ready:",
+            f"Title: {draft.title}",
+            f"Description: {draft.description}",
+            reward_line,
+            "Reply 'approve bounty' to publish or 'reject bounty' to discard.",
+        ]
+        if reward_wei <= 0:
+            lines.insert(
+                3,
+                "Reward not set. Configure BOUNTY_REWARD_WEI or BOUNTY_REWARD_ETH before approval.",
+            )
+        return "\n".join(lines)
+
+    async def _handle_admin_bounty_draft(self, ctx, command: Command) -> str:
+        if not await self._is_operator(ctx):
+            return "Unauthorized: only the operator can draft bounties."
+        active = self.state.get_active_bounty()
+        if active and active.status == "open":
+            return f"Bounty {active.bounty_id} is already open. Close it before drafting a new one."
+        if not self.config.venice_api_key:
+            return "Set VENICE_API_KEY before drafting bounties."
+
+        raw = str(command.payload.get("raw", "")).strip()
+        draft = await self._draft_bounty_with_venice(raw)
+        if not draft:
+            return "I couldn't draft a bounty right now. Try again or provide more detail."
+        self.state.save_bounty_draft(draft)
+        return self._format_bounty_draft(draft)
+
+    async def _handle_admin_bounty_publish(self, ctx, command: Command) -> str:
+        if not await self._is_operator(ctx):
+            return "Unauthorized: only the operator can publish bounties."
+        active = self.state.get_active_bounty()
+        if active and active.status == "open":
+            return f"Bounty {active.bounty_id} is already open. Close it before publishing a new one."
+        draft = self.state.get_latest_bounty_draft()
+        if not draft:
+            return "No draft to publish. Ask me to draft a bounty first."
+        reward_wei = draft.reward_wei or self.config.bounty_reward_wei
+        if reward_wei <= 0:
+            return "Set a positive bounty reward (BOUNTY_REWARD_WEI/ETH) before publishing."
+
+        spec = BountySpec(title=draft.title, description=draft.description, reward_wei=reward_wei)
+        bounty_id = self.poidh.create_bounty(spec)
+        self.state.create_bounty(bounty_id)
+        self.state.clear_bounty_draft()
+        bounty_url = f"{self.config.poidh_app_base.rstrip('/')}/bounty/{bounty_id}"
+        return f"Published bounty {bounty_id}. Link: {bounty_url}"
+
+    async def _handle_admin_bounty_reject(self, ctx, command: Command) -> str:
+        if not await self._is_operator(ctx):
+            return "Unauthorized: only the operator can discard drafts."
+        draft = self.state.get_latest_bounty_draft()
+        if not draft:
+            return "No draft to discard."
+        self.state.clear_bounty_draft()
+        return "Draft discarded."
 
     async def _handle_admin_bounty_create(self, ctx, command: Command) -> str:
         if not await self._is_operator(ctx):

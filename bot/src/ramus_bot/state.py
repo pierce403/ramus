@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from .models import Claim, Decision
+from .models import BountyDraft, Claim, Decision
 
 
 @dataclass(frozen=True)
@@ -45,12 +45,22 @@ class StateStore:
     def record_payout(self, bounty_id: int, claim_id: int, tx_hash: str) -> None:
         raise NotImplementedError
 
+    def save_bounty_draft(self, draft: BountyDraft) -> None:
+        raise NotImplementedError
+
+    def get_latest_bounty_draft(self) -> BountyDraft | None:
+        raise NotImplementedError
+
+    def clear_bounty_draft(self) -> None:
+        raise NotImplementedError
+
 
 class MemoryStateStore(StateStore):
     def __init__(self) -> None:
         self._bounty: BountyRecord | None = None
         self._decisions: list[Decision] = []
         self._claims: dict[int, list[Claim]] = {}
+        self._draft: BountyDraft | None = None
 
     def get_active_bounty(self) -> BountyRecord | None:
         if self._bounty and self._bounty.status == "open":
@@ -88,6 +98,15 @@ class MemoryStateStore(StateStore):
 
     def record_payout(self, bounty_id: int, claim_id: int, tx_hash: str) -> None:
         return None
+
+    def save_bounty_draft(self, draft: BountyDraft) -> None:
+        self._draft = draft
+
+    def get_latest_bounty_draft(self) -> BountyDraft | None:
+        return self._draft
+
+    def clear_bounty_draft(self) -> None:
+        self._draft = None
 
 
 class SQLiteStateStore(StateStore):
@@ -135,6 +154,15 @@ class SQLiteStateStore(StateStore):
                     claim_id INTEGER NOT NULL,
                     tx_hash TEXT NOT NULL,
                     created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS bounty_drafts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    reward_wei INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    source_text TEXT
                 );
                 """
             )
@@ -305,4 +333,51 @@ class SQLiteStateStore(StateStore):
                 """,
                 (bounty_id, claim_id, tx_hash, datetime.utcnow().isoformat()),
             )
+            self._conn.commit()
+
+    def save_bounty_draft(self, draft: BountyDraft) -> None:
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute("DELETE FROM bounty_drafts")
+            cursor.execute(
+                """
+                INSERT INTO bounty_drafts (title, description, reward_wei, created_at, source_text)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    draft.title,
+                    draft.description,
+                    draft.reward_wei,
+                    draft.created_at.isoformat(),
+                    draft.source_text,
+                ),
+            )
+            self._conn.commit()
+
+    def get_latest_bounty_draft(self) -> BountyDraft | None:
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                SELECT title, description, reward_wei, created_at, source_text
+                FROM bounty_drafts
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return BountyDraft(
+                title=str(row["title"]),
+                description=str(row["description"]),
+                reward_wei=int(row["reward_wei"]),
+                created_at=datetime.fromisoformat(row["created_at"]),
+                source_text=str(row["source_text"]) if row["source_text"] is not None else None,
+            )
+
+    def clear_bounty_draft(self) -> None:
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute("DELETE FROM bounty_drafts")
             self._conn.commit()
