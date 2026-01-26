@@ -24,7 +24,8 @@ Planned layout (update as it becomes real):
 ## Build & Test Commands
 
 ```bash
-# Add verified commands here
+# Web build
+cd web && npm run build
 ```
 
 ## Coding Conventions
@@ -36,6 +37,7 @@ Planned layout (update as it becomes real):
 
 - ENS resolution can fail if `web3` doesn't auto-load the ENS helper. Use `ENS.from_web3` when `w3.ens` is missing. Updated in `bot/src/ramus_bot/xmtp_bot.py`.
 - XMTP sender addresses may arrive as non-string types; coerce to string/hex before comparison in `bot/src/ramus_bot/xmtp_bot.py`.
+- Ethers v6 `Wallet.createRandom()` returns `HDNodeWallet` (private fields) and is not assignable to `Wallet`; avoid typing the helper as `Wallet` in `web/src/components/ChatPanel.tsx`.
 
 ## Dependencies
 

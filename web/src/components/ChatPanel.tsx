@@ -44,7 +44,7 @@ async function createSigner(): Promise<Signer> {
   };
 }
 
-function getOrCreateEphemeralWallet(): Wallet {
+function getOrCreateEphemeralWallet() {
   const stored = localStorage.getItem(EPHEMERAL_KEY_STORAGE);
   if (stored) {
     return new Wallet(stored);
