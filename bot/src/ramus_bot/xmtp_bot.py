@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import re
 from dataclasses import replace
@@ -58,7 +59,7 @@ class XmtpBot:
 
         @agent.on("text")
         async def on_text(ctx) -> None:  # type: ignore[override]
-            self._log_incoming_message(ctx)
+            await self._log_incoming_message(ctx)
             text = str(ctx.message.content)
             command = parse_command(text)
             response = await self._handle_command(ctx, command)
@@ -98,8 +99,8 @@ class XmtpBot:
             f"Operator should set {missing_list} in the bot environment."
         )
 
-    def _log_incoming_message(self, ctx) -> None:
-        sender = self._sender_address(ctx) or "unknown"
+    async def _log_incoming_message(self, ctx) -> None:
+        sender = await self._sender_address(ctx) or "unknown"
         message = getattr(ctx, "message", None)
         message_id = self._format_message_id(getattr(message, "id", None))
         content = getattr(message, "content", "")
@@ -108,7 +109,7 @@ class XmtpBot:
         if len(preview) > 200:
             preview = f"{preview[:197]}..."
         message_type = type(message).__name__ if message is not None else "unknown"
-        details = self._message_debug_fields(ctx)
+        details = await self._message_debug_fields(ctx)
         logger.info(
             "XMTP inbound message sender={} id={} type={} preview={}",
             sender,
@@ -121,7 +122,7 @@ class XmtpBot:
         else:
             logger.debug("XMTP sender details: {}", details)
 
-    def _message_debug_fields(self, ctx) -> dict[str, str]:
+    async def _message_debug_fields(self, ctx) -> dict[str, str]:
         fields: dict[str, str] = {}
         for label, obj in (
             ("ctx", ctx),
@@ -136,7 +137,10 @@ class XmtpBot:
                     method = getattr(obj, method_name, None)
                     if callable(method):
                         try:
-                            fields[f"{label}.{method_name}()"] = self._safe_repr(method())
+                            result = method()
+                            if inspect.isawaitable(result):
+                                result = await result
+                            fields[f"{label}.{method_name}()"] = self._safe_repr(result)
                         except Exception as exc:
                             fields[f"{label}.{method_name}()"] = f"<error: {exc}>"
             for attr in self._candidate_field_names(obj):
@@ -362,11 +366,13 @@ class XmtpBot:
             return match.group(0)
         return None
 
-    def _sender_address(self, ctx) -> str | None:
+    async def _sender_address(self, ctx) -> str | None:
         if hasattr(ctx, "get_sender_address") and callable(getattr(ctx, "get_sender_address")):
             try:
-                sender = ctx.get_sender_address()
-                coerced = self._coerce_address(sender)
+                sender_result = ctx.get_sender_address()
+                if inspect.isawaitable(sender_result):
+                    sender_result = await sender_result
+                coerced = self._coerce_address(sender_result)
                 if coerced:
                     return coerced
             except Exception:
@@ -392,8 +398,8 @@ class XmtpBot:
             return str(peer_inbox_id)
         return None
 
-    def _is_operator(self, ctx) -> bool:
-        sender = self._sender_address(ctx)
+    async def _is_operator(self, ctx) -> bool:
+        sender = await self._sender_address(ctx)
         operator = self._resolve_operator_address()
         if not sender or not operator:
             return False
@@ -444,9 +450,9 @@ class XmtpBot:
         os.environ[key] = value
         return env_path
 
-    def _handle_admin_command(self, ctx, command: Command) -> str | None:
-        if not self._is_operator(ctx):
-            sender = self._sender_address(ctx) or "unknown"
+    async def _handle_admin_command(self, ctx, command: Command) -> str | None:
+        if not await self._is_operator(ctx):
+            sender = await self._sender_address(ctx) or "unknown"
             operator_addr = self._resolve_operator_address()
             if operator_addr:
                 operator = operator_addr
@@ -531,7 +537,7 @@ class XmtpBot:
 
     async def _handle_command(self, ctx, command: Command) -> str:
         if command.action.startswith("admin."):
-            admin_response = self._handle_admin_command(ctx, command)
+            admin_response = await self._handle_admin_command(ctx, command)
             if admin_response is not None:
                 return admin_response
             return help_text()
