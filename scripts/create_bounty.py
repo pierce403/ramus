@@ -57,10 +57,41 @@ def _parse_reward(reward_wei: str | None, reward_eth: str | None, default_wei: i
     raise ValueError("Reward not set. Provide --reward-wei/--reward-eth or set BOUNTY_REWARD_WEI/ETH.")
 
 
+def _auto_reward_wei(config, client) -> int:
+    from ramus_bot.evaluator import Evaluator
+    from ramus_bot.runner import BotRunner, RunnerConfig
+    from ramus_bot.runtime import RuntimeSettings
+    from ramus_bot.state import MemoryStateStore
+
+    runtime = RuntimeSettings(auto_run=True, bounty_reward_wei=0, bounty_reward_source="none")
+    runner = BotRunner(
+        config=config,
+        runner_config=RunnerConfig(),
+        poidh=client,
+        evaluator=Evaluator(),
+        state=MemoryStateStore(),
+        runtime=runtime,
+    )
+    return runner._default_reward_wei(runtime)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Create a POIDH bounty directly via Ramus utils.")
-    parser.add_argument("--title", required=True, help="Bounty title")
-    parser.add_argument("--description", required=True, help="Bounty description")
+    parser.add_argument(
+        "--title",
+        default="Ramus Grove Stewardship",
+        help="Bounty title",
+    )
+    parser.add_argument(
+        "--description",
+        default=(
+            "Restore a small patch of green space with a mindful cleanup ritual. "
+            "Clear litter from a park, trail, or curbside garden, then share "
+            "before/after photos and a short note describing what you removed "
+            "and where the cleanup took place."
+        ),
+        help="Bounty description",
+    )
     parser.add_argument(
         "--type",
         choices=["solo", "open"],
@@ -69,6 +100,11 @@ def main() -> int:
     )
     parser.add_argument("--reward-wei", help="Reward in wei (integer)")
     parser.add_argument("--reward-eth", help="Reward in ETH (decimal)")
+    parser.add_argument(
+        "--reward-auto",
+        action="store_true",
+        help="Use the auto default reward (10% of wallet balance) via BotRunner helper",
+    )
 
     args = parser.parse_args()
 
@@ -88,9 +124,14 @@ def main() -> int:
 
     try:
         config = load_config()
-        reward_wei = _parse_reward(args.reward_wei, args.reward_eth, config.bounty_reward_wei)
         wallet = init_wallet(config)
         client = PoidhClient(wallet=wallet, config=config)
+        if args.reward_auto:
+            reward_wei = _auto_reward_wei(config, client)
+            if reward_wei <= 0:
+                raise ValueError("Auto reward resolved to 0; fund the wallet or set an explicit reward.")
+        else:
+            reward_wei = _parse_reward(args.reward_wei, args.reward_eth, config.bounty_reward_wei)
         spec = BountySpec(
             title=args.title,
             description=args.description,
@@ -104,6 +145,19 @@ def main() -> int:
         )
         bounty_id = client.create_bounty(spec)
         print(f"Created bounty ID: {bounty_id}")
+        try:
+            bounties = client.fetch_bounties()
+            match = next((b for b in bounties if b.bounty_id == bounty_id), None)
+            if match:
+                print(
+                    "Verified onchain bounty:",
+                    f"id={match.bounty_id}, issuer={match.issuer}, amount={match.amount_wei} wei,",
+                    f"title={match.title!r}",
+                )
+            else:
+                print("Warning: bounty not found via getBounties() yet.")
+        except Exception as exc:
+            print(f"Warning: failed to verify bounty via getBounties(): {exc}")
         return 0
     except (ConfigError, WalletError, RateLimitError, ValueError) as exc:
         print(f"Error: {exc}")
