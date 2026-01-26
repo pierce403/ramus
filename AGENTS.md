@@ -33,6 +33,11 @@ cd web && npm run build
 - Document any style or naming conventions as they emerge.
 - Keep persona text and message templates centralized for reuse.
 
+## Security & Repo Hygiene
+
+- Root `.gitignore` blocks common secrets: `.env`, `.env.*`, `.envrc`, `.direnv/`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `keystore*.json`, `wallet*.json`, `mnemonic*.txt`, `seed*.txt`, `private*.txt`.
+- Verify ignores with `git check-ignore -v <path>` when adding new secret-y files.
+
 ## Known Issues & Solutions
 
 - ENS resolution can fail if `web3` doesn't auto-load the ENS helper. Use `ENS.from_web3` when `w3.ens` is missing. Updated in `bot/src/ramus_bot/xmtp_bot.py`.

@@ -12,6 +12,21 @@ __pycache__/
 !.env.example
 !.env.*.example
 
+# Local secrets and key material
+.envrc
+.direnv/
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+keystore*.json
+wallet*.json
+mnemonic*.txt
+seed*.txt
+private*.txt
+
 # Build outputs
 web/dist/
 
