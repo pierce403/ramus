@@ -20,10 +20,11 @@ try:
 except ImportError:  # pragma: no cover - depends on optional ens extra
     ENS = None
 
+from .audit import write_decision_report
 from .config import BotConfig
 from .ens_utils import namehash, resolve_ens_via_registry
 from .evaluator import Evaluator, ScoreBreakdown
-from .models import BountySpec
+from .models import BountySpec, Decision
 from .poidh.client import PoidhClient
 from .protocol import Command, help_text, parse_command
 from .state import StateStore
@@ -557,19 +558,12 @@ class XmtpBot:
         if command.action == "claim.explain":
             claim_id = command.payload.get("claim_id")
             return self._handle_claim_explain(claim_id)
+        if command.action == "admin.bounty.create":
+            return await self._handle_admin_bounty_create(ctx, command)
+        if command.action == "admin.claim.accept":
+            return await self._handle_admin_claim_accept(ctx, command)
         if command.action == "bounty.create":
-            title = str(command.payload.get("title", "Clean a local green space"))
-            description = str(
-                command.payload.get(
-                    "description",
-                    "Pick up trash in a nearby park or green space and share before/after photos.",
-                )
-            )
-            reward_wei = int(command.payload.get("reward_wei", 0))
-            spec = BountySpec(title=title, description=description, reward_wei=reward_wei)
-            bounty_id = self.poidh.create_bounty(spec)
-            self.state.create_bounty(bounty_id)
-            return f"Created bounty {bounty_id}."
+            return await self._handle_admin_bounty_create(ctx, command)
         return help_text()
 
     def _load_claims(self):
@@ -631,6 +625,67 @@ class XmtpBot:
         breakdown = self.evaluator.score_claim(claim)
         reasons = ", ".join(breakdown.reasons)
         return f"Submission #{claim_id_int} scored {breakdown.total:.2f}. Reasons: {reasons}."
+
+    async def _handle_admin_bounty_create(self, ctx, command: Command) -> str:
+        if not await self._is_operator(ctx):
+            return "Unauthorized: only the operator can create bounties."
+        active = self.state.get_active_bounty()
+        if active and active.status == "open":
+            return f"Bounty {active.bounty_id} is already open. Close it before creating a new one."
+
+        title = str(command.payload.get("title", "Clean a local green space"))
+        description = str(
+            command.payload.get(
+                "description",
+                "Pick up trash in a nearby park or green space and share before/after photos.",
+            )
+        )
+        reward_wei = command.payload.get("reward_wei")
+        if reward_wei is None:
+            reward_wei = self.config.bounty_reward_wei
+        try:
+            reward_wei_int = int(reward_wei)
+        except (TypeError, ValueError):
+            reward_wei_int = 0
+        if reward_wei_int <= 0:
+            return "Set a positive bounty reward (BOUNTY_REWARD_WEI/ETH) before creating a bounty."
+
+        spec = BountySpec(title=title, description=description, reward_wei=reward_wei_int)
+        bounty_id = self.poidh.create_bounty(spec)
+        self.state.create_bounty(bounty_id)
+        return f"Created bounty {bounty_id}."
+
+    async def _handle_admin_claim_accept(self, ctx, command: Command) -> str:
+        if not await self._is_operator(ctx):
+            return "Unauthorized: only the operator can accept a winner."
+        active = self.state.get_active_bounty()
+        if not active:
+            return "No active bounty."
+        claim_id = command.payload.get("claim_id")
+        try:
+            claim_id_int = int(claim_id)
+        except (TypeError, ValueError):
+            return "Please specify a claim id, e.g. select winner #3."
+
+        claims = self.poidh.fetch_claims(active.bounty_id)
+        self.state.record_claims(active.bounty_id, claims)
+        claim = self.state.get_claim(active.bounty_id, claim_id_int)
+        if not claim:
+            return f"Claim #{claim_id_int} not found for bounty {active.bounty_id}."
+
+        scores = {c.claim_id: self.evaluator.score_claim(c).total for c in claims}
+        decision = Decision(
+            bounty_id=active.bounty_id,
+            winner_claim_id=claim_id_int,
+            reasoning="Operator selected the winner manually.",
+            scores=scores,
+        )
+        self.state.record_decision(decision)
+        write_decision_report(decision, claims, self.config.audit_dir)
+        tx_hash = self.poidh.accept_claim(active.bounty_id, claim_id_int)
+        self.state.record_payout(active.bounty_id, claim_id_int, tx_hash)
+        self.state.mark_bounty_closed(active.bounty_id)
+        return f"Accepted claim #{claim_id_int} for bounty {active.bounty_id}. Tx: {tx_hash}"
 
 
 async def run_xmtp_bot(

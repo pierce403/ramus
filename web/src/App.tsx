@@ -6,6 +6,11 @@ import {
   ramusVoice,
 } from "./content/ramus";
 
+const POIDH_ACCOUNT = import.meta.env.VITE_POIDH_ACCOUNT as string | undefined;
+const POIDH_URL = POIDH_ACCOUNT
+  ? `https://poidh.xyz/account/${POIDH_ACCOUNT}`
+  : "https://poidh.xyz";
+
 export default function App() {
   return (
     <div className="app">
@@ -97,7 +102,10 @@ export default function App() {
         </div>
         <div className="footer__links">
           <span>ramus.ai</span>
-          <span>POIDH + XMTP</span>
+          <a href={POIDH_URL} target="_blank" rel="noreferrer">
+            POIDH account
+          </a>
+          <span>XMTP</span>
         </div>
       </footer>
     </div>

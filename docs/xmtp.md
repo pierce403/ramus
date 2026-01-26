@@ -21,6 +21,13 @@ Are there any that look good?
 What was wrong with submission #3?
 ```
 
+Operator-only manual commands:
+
+```
+make bounty
+select winner #3
+```
+
 ## Key environment variables
 
 - `XMTP_ENV` (production or dev)

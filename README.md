@@ -53,6 +53,7 @@ The web app uses `@xmtp/browser-sdk` with a wallet-based signer. You must set:
 
 - `VITE_XMTP_ENV`
 - `VITE_XMTP_BOT_ADDRESS`
+- `VITE_POIDH_ACCOUNT` (Ramus address for POIDH profile link)
 
 ## Deployment
 

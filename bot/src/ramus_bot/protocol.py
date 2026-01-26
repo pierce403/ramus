@@ -28,8 +28,8 @@ def parse_command(text: str) -> Command:
         return Command(action="help", payload={})
     if lowered in {"status", "state"}:
         return Command(action="status", payload={})
-    if lowered.startswith("create"):
-        return Command(action="bounty.create", payload={"raw": stripped})
+    if "bounty" in lowered and any(term in lowered for term in ("create", "make", "new")):
+        return Command(action="admin.bounty.create", payload={"raw": stripped})
     if tokens and tokens[0] in {"set", "admin"}:
         idx = 1 if tokens[0] == "set" else 2
         if len(tokens) > idx:
@@ -43,10 +43,12 @@ def parse_command(text: str) -> Command:
                 value = parts[idx + 1].strip() if len(parts) > idx + 1 else ""
                 return Command(action="admin.set_venice_model", payload={"model": value})
 
-    if "claim" in lowered or "submission" in lowered:
-        match = re.search(r"(submission|claim)\s*#?\s*(\d+)", lowered)
+    if "claim" in lowered or "submission" in lowered or "winner" in lowered:
+        match = re.search(r"(submission|claim|winner)\s*#?\s*(\d+)", lowered)
         if match:
             claim_id = int(match.group(2))
+            if any(term in lowered for term in ("select", "pick", "choose", "accept", "approve")):
+                return Command(action="admin.claim.accept", payload={"claim_id": claim_id})
             if "wrong" in lowered or "why" in lowered or "what was" in lowered:
                 return Command(action="claim.explain", payload={"claim_id": claim_id})
             return Command(action="claim.explain", payload={"claim_id": claim_id})
@@ -74,6 +76,8 @@ def help_text() -> str:
         "- admin JSON: {\"action\": \"admin.set_venice_model\", \"payload\": {\"model\": \"...\"}}\n"
         "- admin text: set venice_key <key>\n"
         "- admin text: set venice_model <model>\n"
+        "- admin text: make bounty\n"
+        "- admin text: select winner #3\n"
         "- ask: how many claims have been submitted?\n"
         "- ask: are there any that look good?\n"
         "- ask: what was wrong with submission #3?"
