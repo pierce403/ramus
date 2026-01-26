@@ -63,6 +63,7 @@ cd web && npm run build
 - Web3 SignedTransaction uses `raw_transaction` in newer versions; `bot/src/ramus_bot/poidh/client.py` now handles both `rawTransaction` and `raw_transaction`.
 - Base RPC rate limits (429) trigger a shared cooldown (10m, 20m, 40m, ...) in `bot/src/ramus_bot/wallet.py`, so all threads pause before retrying. Warnings include high-level context (e.g., creating bounty, fetching claims) via `rpc_context`.
 - `INFURA_API_KEY` is required for Base mainnet only; XMTP command `set infura_key <key>` updates env + RPC URLs (restart required). Public Base RPC is blocked.
+- `POIDH_RPC_URL` has been removed; Base RPC is derived from `INFURA_API_KEY` only.
 - Help text now lists commands without "admin text" and ends with an "Operator only" line; persona only applies to non-command freeform when Venice is set.
 - Bounty creation is guarded by a shared lock via `StateStore.bounty_creation_guard()` to prevent multiple open/creating bounties.
 - `status` output includes wallet balance and environment config status (non-secret flags) via `bot/src/ramus_bot/xmtp_bot.py`.

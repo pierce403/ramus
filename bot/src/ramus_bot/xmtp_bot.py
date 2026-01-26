@@ -106,11 +106,7 @@ class XmtpBot:
         missing = []
         if not self.config.venice_api_key:
             missing.append("VENICE_API_KEY (optional AI scoring)")
-        if (
-            not self.config.infura_api_key
-            and "infura.io" not in self.config.poidh_rpc_url
-            and "mainnet.base.org" in self.config.poidh_rpc_url
-        ):
+        if not self.config.infura_api_key:
             missing.append("INFURA_API_KEY (required for Base RPC)")
 
         if not missing:
@@ -559,7 +555,7 @@ class XmtpBot:
             f"- RPC: {wallet_stats.rpc_line}",
             "",
             "Environment:",
-            f"- POIDH_RPC_URL: {self.config.poidh_rpc_url}",
+            f"- Base RPC: {self.config.poidh_rpc_url}",
             f"- POIDH_CHAIN: {self.config.poidh_chain_slug} ({self.config.poidh_chain_id})",
             f"- XMTP_ENV: {self.config.xmtp_env}",
             f"- INFURA_API_KEY: {'set' if self.config.infura_api_key else 'not set'}",
@@ -664,7 +660,7 @@ class XmtpBot:
 
             infura_url = _infura_rpc_url(self.config.poidh_chain_slug, key)
             if infura_url:
-                self._update_env_file("POIDH_RPC_URL", infura_url)
+                self.config = replace(self.config, poidh_rpc_url=infura_url)
             self._update_env_file("ETH_MAINNET_RPC_URL", f"https://mainnet.infura.io/v3/{key}")
             return f"INFURA_API_KEY saved to {env_path}. Restart the bot to apply."
 

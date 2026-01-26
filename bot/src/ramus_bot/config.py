@@ -137,15 +137,12 @@ def _infura_rpc_url(chain_slug: str, api_key: str) -> str | None:
 
 
 def _resolve_poidh_rpc_url(chain_slug: str, api_key: str | None) -> str:
-    raw = os.getenv("POIDH_RPC_URL")
-    if raw and "infura.io" not in raw:
-        raise ConfigError("POIDH_RPC_URL must be an Infura endpoint.")
     if not api_key:
         raise ConfigError("INFURA_API_KEY is required for Base RPC access.")
     infura_url = _infura_rpc_url(chain_slug, api_key)
     if not infura_url:
         raise ConfigError(f"Infura only supported for Base mainnet (chain slug {chain_slug}).")
-    return raw or infura_url
+    return infura_url
 
 
 def _resolve_eth_mainnet_rpc_url(api_key: str | None) -> str:
