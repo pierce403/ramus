@@ -63,8 +63,15 @@ class RetryingHTTPProvider(HTTPProvider):
                     raise
                 delay = min(self._backoff_seconds * (2 ** (attempt - 1)), self._max_backoff_seconds)
                 jitter = random.uniform(0, delay * 0.25)
+                context = _describe_rpc_method(method)
+                detail = f"{context} ({method})" if context else str(method)
+                extra = _describe_rpc_params(method, params)
+                endpoint = getattr(self, "endpoint_uri", None) or "RPC"
                 logger.warning(
-                    "RPC rate limited ({}). Retrying in {:.1f}s (attempt {}/{})",
+                    "RPC rate limited during {}{} on {} ({}). Retrying in {:.1f}s (attempt {}/{})",
+                    detail,
+                    f" [{extra}]" if extra else "",
+                    endpoint,
                     exc,
                     delay + jitter,
                     attempt,
@@ -81,6 +88,34 @@ def _is_rate_limit_error(exc: Exception) -> bool:
         response = exc.response
         return response is not None and response.status_code == 429
     return "429" in str(exc)
+
+
+def _describe_rpc_method(method: str) -> str:
+    return {
+        "eth_getBalance": "wallet balance lookup",
+        "eth_call": "contract call",
+        "eth_sendRawTransaction": "transaction broadcast",
+        "eth_getTransactionCount": "nonce lookup",
+        "eth_feeHistory": "fee history lookup",
+        "eth_gasPrice": "gas price lookup",
+        "eth_getBlockByNumber": "block lookup",
+    }.get(method, "")
+
+
+def _describe_rpc_params(method: str, params) -> str:
+    if not params:
+        return ""
+    try:
+        if method == "eth_call" and isinstance(params[0], dict):
+            to = params[0].get("to")
+            return f"to={to}" if to else ""
+        if method == "eth_getBalance":
+            return f"address={params[0]}"
+        if method == "eth_sendRawTransaction":
+            return "raw_tx"
+    except Exception:
+        return ""
+    return ""
 
 
 def init_wallet(config: BotConfig) -> BotWallet:

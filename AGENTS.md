@@ -61,7 +61,7 @@ cd web && npm run build
 - If no bounty reward is set, the bot uses ~10% of the wallet balance as the default reward (auto-run + admin defaults).
 - XMTP responses now emit stdout markers when processing/sent (`bot/src/ramus_bot/xmtp_bot.py`).
 - Web3 SignedTransaction uses `raw_transaction` in newer versions; `bot/src/ramus_bot/poidh/client.py` now handles both `rawTransaction` and `raw_transaction`.
-- Base RPC rate limits (429) are mitigated with exponential backoff + jitter in `bot/src/ramus_bot/wallet.py`; consider using a dedicated RPC if limits persist.
+- Base RPC rate limits (429) are mitigated with exponential backoff + jitter in `bot/src/ramus_bot/wallet.py`; warnings include RPC method context to explain why calls are made.
 
 ## Rapport & Reflection
 
