@@ -58,6 +58,10 @@ def parse_command(text: str) -> Command:
                 parts = stripped.split(None, idx + 1)
                 value = parts[idx + 1].strip() if len(parts) > idx + 1 else ""
                 return Command(action="admin.set_venice_model", payload={"model": value})
+            if key_name in {"infura_key", "infura-key", "infurakey"}:
+                parts = stripped.split(None, idx + 1)
+                value = parts[idx + 1].strip() if len(parts) > idx + 1 else ""
+                return Command(action="admin.set_infura_key", payload={"key": value})
             if key_name in {
                 "bounty_reward_wei",
                 "reward_wei",
@@ -120,6 +124,7 @@ def help_text() -> str:
         "- help\n"
         "- admin text: set venice_key <key>\n"
         "- admin text: set venice_model <model>\n"
+        "- admin text: set infura_key <key>\n"
         "- admin text: set bounty_reward_wei <amount>\n"
         "- admin text: set bounty_reward_eth <amount>\n"
         "- admin text: set auto_run on/off\n"

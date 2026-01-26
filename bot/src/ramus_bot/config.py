@@ -17,6 +17,7 @@ class BotConfig:
     poidh_chain_slug: str
     poidh_rpc_url: str
     poidh_api_key: str | None
+    infura_api_key: str | None
     wallet_private_key: str
     wallet_address: str | None
     operator_ens: str | None
@@ -128,6 +129,44 @@ def _parse_bounty_reward() -> tuple[int, str]:
     return 0, "none"
 
 
+def _infura_rpc_url(chain_slug: str, api_key: str) -> str | None:
+    slug = chain_slug.strip().lower()
+    mapping = {
+        "base": "https://base-mainnet.infura.io/v3/{key}",
+        "base-sepolia": "https://base-sepolia.infura.io/v3/{key}",
+        "base_sepolia": "https://base-sepolia.infura.io/v3/{key}",
+        "arbitrum": "https://arbitrum-mainnet.infura.io/v3/{key}",
+        "arbitrum-sepolia": "https://arbitrum-sepolia.infura.io/v3/{key}",
+        "optimism": "https://optimism-mainnet.infura.io/v3/{key}",
+        "optimism-sepolia": "https://optimism-sepolia.infura.io/v3/{key}",
+    }
+    template = mapping.get(slug)
+    if not template:
+        return None
+    return template.format(key=api_key)
+
+
+def _resolve_poidh_rpc_url(chain_slug: str, api_key: str | None) -> str:
+    raw = os.getenv("POIDH_RPC_URL")
+    if raw:
+        return raw
+    if api_key:
+        infura_url = _infura_rpc_url(chain_slug, api_key)
+        if infura_url:
+            return infura_url
+        logger.warning("INFURA_API_KEY set but no Infura endpoint mapping for chain slug {}", chain_slug)
+    return "https://mainnet.base.org"
+
+
+def _resolve_eth_mainnet_rpc_url(api_key: str | None) -> str:
+    raw = os.getenv("ETH_MAINNET_RPC_URL")
+    if raw:
+        return raw
+    if api_key:
+        return f"https://mainnet.infura.io/v3/{api_key}"
+    return "https://cloudflare-eth.com"
+
+
 def _parse_bool(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
     if raw is None or raw.strip() == "":
@@ -144,13 +183,17 @@ def load_config() -> BotConfig:
     wallet_private_key = _resolve_wallet_key()
     bounty_reward_wei, bounty_reward_source = _parse_bounty_reward()
     auto_run = _parse_bool("AUTO_RUN", default=True)
+    infura_api_key = os.getenv("INFURA_API_KEY")
+    poidh_rpc_url = _resolve_poidh_rpc_url(os.getenv("POIDH_CHAIN_SLUG", "base"), infura_api_key)
+    eth_mainnet_rpc_url = _resolve_eth_mainnet_rpc_url(infura_api_key)
     return BotConfig(
         poidh_api_base=os.getenv("POIDH_API_BASE", "https://api.poidh.xyz"),
         poidh_app_base=os.getenv("POIDH_APP_BASE", "https://poidh.xyz"),
         poidh_chain_id=int(os.getenv("POIDH_CHAIN_ID", "8453")),
         poidh_chain_slug=os.getenv("POIDH_CHAIN_SLUG", "base"),
-        poidh_rpc_url=os.getenv("POIDH_RPC_URL", "https://mainnet.base.org"),
+        poidh_rpc_url=poidh_rpc_url,
         poidh_api_key=os.getenv("POIDH_API_KEY"),
+        infura_api_key=infura_api_key,
         wallet_private_key=wallet_private_key,
         wallet_address=os.getenv("WALLET_ADDRESS"),
         operator_ens=os.getenv("OPERATOR_ENS"),
@@ -158,7 +201,7 @@ def load_config() -> BotConfig:
             "OPERATOR_ADDRESS",
             "0x7ab874Eeef0169ADA0d225E9801A3FfFfa26aAC3",
         ),
-        eth_mainnet_rpc_url=os.getenv("ETH_MAINNET_RPC_URL", "https://cloudflare-eth.com"),
+        eth_mainnet_rpc_url=eth_mainnet_rpc_url,
         xmtp_env=os.getenv("XMTP_ENV", "production"),
         xmtp_db_path=os.getenv("XMTP_DB_PATH", "./.xmtp"),
         xmtp_wallet_key=wallet_private_key,
