@@ -28,6 +28,8 @@ class BotConfig:
     state_db_path: str
     log_level: str
     bounty_reward_wei: int
+    bounty_reward_source: str
+    auto_run: bool
     ai_score_endpoint: str | None
     venice_api_key: str | None
     venice_model: str
@@ -98,7 +100,7 @@ def _resolve_wallet_key() -> str:
     return key
 
 
-def _parse_bounty_reward() -> int:
+def _parse_bounty_reward() -> tuple[int, str]:
     raw_wei = os.getenv("BOUNTY_REWARD_WEI")
     raw_eth = os.getenv("BOUNTY_REWARD_ETH")
 
@@ -109,7 +111,9 @@ def _parse_bounty_reward() -> int:
             raise ConfigError("Invalid BOUNTY_REWARD_WEI") from exc
         if reward < 0:
             raise ConfigError("BOUNTY_REWARD_WEI must be non-negative")
-        return reward
+        if raw_eth:
+            logger.warning("Both BOUNTY_REWARD_WEI and BOUNTY_REWARD_ETH are set; using BOUNTY_REWARD_WEI.")
+        return reward, "wei"
 
     if raw_eth:
         try:
@@ -119,14 +123,27 @@ def _parse_bounty_reward() -> int:
         if reward_eth < 0:
             raise ConfigError("BOUNTY_REWARD_ETH must be non-negative")
         reward = int(reward_eth * Decimal("1000000000000000000"))
-        return reward
+        return reward, "eth"
 
-    return 0
+    return 0, "none"
+
+
+def _parse_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on", "enable", "enabled"}:
+        return True
+    if value in {"0", "false", "no", "off", "disable", "disabled"}:
+        return False
+    raise ConfigError(f"Invalid boolean value for {name}: {raw}")
 
 
 def load_config() -> BotConfig:
     wallet_private_key = _resolve_wallet_key()
-    bounty_reward_wei = _parse_bounty_reward()
+    bounty_reward_wei, bounty_reward_source = _parse_bounty_reward()
+    auto_run = _parse_bool("AUTO_RUN", default=True)
     return BotConfig(
         poidh_api_base=os.getenv("POIDH_API_BASE", "https://api.poidh.xyz"),
         poidh_app_base=os.getenv("POIDH_APP_BASE", "https://poidh.xyz"),
@@ -148,6 +165,8 @@ def load_config() -> BotConfig:
         state_db_path=os.getenv("STATE_DB_PATH", "./state/ramus.sqlite"),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         bounty_reward_wei=bounty_reward_wei,
+        bounty_reward_source=bounty_reward_source,
+        auto_run=auto_run,
         ai_score_endpoint=os.getenv("AI_SCORE_ENDPOINT"),
         venice_api_key=os.getenv("VENICE_API_KEY"),
         venice_model=os.getenv("VENICE_MODEL", "llama-3.3-70b"),

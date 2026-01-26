@@ -18,6 +18,19 @@ def parse_command(text: str) -> Command:
         return Command(action="help", payload={})
     if lowered in {"status", "state"}:
         return Command(action="status", payload={})
+    if lowered in {"settings", "config", "configuration", "toggles"}:
+        return Command(action="settings", payload={})
+
+    reward_match = re.search(
+        r"(?:^|\s)set\s+(?:bounty\s+)?reward\s+([0-9]*\.?[0-9]+)\s*(eth|wei)\b",
+        lowered,
+    )
+    if reward_match:
+        amount = reward_match.group(1)
+        unit = reward_match.group(2)
+        if unit == "wei":
+            return Command(action="admin.set_bounty_reward_wei", payload={"reward": amount})
+        return Command(action="admin.set_bounty_reward_eth", payload={"reward": amount})
     if "bounty" in lowered and (
         "draft" in lowered
         or "idea" in lowered
@@ -45,6 +58,36 @@ def parse_command(text: str) -> Command:
                 parts = stripped.split(None, idx + 1)
                 value = parts[idx + 1].strip() if len(parts) > idx + 1 else ""
                 return Command(action="admin.set_venice_model", payload={"model": value})
+            if key_name in {
+                "bounty_reward_wei",
+                "reward_wei",
+                "bounty_wei",
+                "rewardwei",
+                "bountyrewardwei",
+            }:
+                parts = stripped.split(None, idx + 1)
+                value = parts[idx + 1].strip() if len(parts) > idx + 1 else ""
+                return Command(action="admin.set_bounty_reward_wei", payload={"reward": value})
+            if key_name in {
+                "bounty_reward_eth",
+                "reward_eth",
+                "bounty_eth",
+                "rewardeth",
+                "bountyrewardeth",
+            }:
+                parts = stripped.split(None, idx + 1)
+                value = parts[idx + 1].strip() if len(parts) > idx + 1 else ""
+                return Command(action="admin.set_bounty_reward_eth", payload={"reward": value})
+            if key_name in {"auto_run", "autorun", "auto-run"}:
+                parts = stripped.split(None, idx + 1)
+                value = parts[idx + 1].strip() if len(parts) > idx + 1 else ""
+                return Command(action="admin.set_auto_run", payload={"enabled": value})
+
+    if "auto run" in lowered or "autorun" in lowered:
+        if any(token in lowered for token in ("off", "disable", "disabled", "false", "0")):
+            return Command(action="admin.set_auto_run", payload={"enabled": False})
+        if any(token in lowered for token in ("on", "enable", "enabled", "true", "1")):
+            return Command(action="admin.set_auto_run", payload={"enabled": True})
 
     if "claim" in lowered or "submission" in lowered or "winner" in lowered:
         match = re.search(r"(submission|claim|winner)\s*#?\s*(\d+)", lowered)
@@ -73,9 +116,13 @@ def help_text() -> str:
     return (
         "Ramus commands:\n"
         "- status\n"
+        "- settings\n"
         "- help\n"
         "- admin text: set venice_key <key>\n"
         "- admin text: set venice_model <model>\n"
+        "- admin text: set bounty_reward_wei <amount>\n"
+        "- admin text: set bounty_reward_eth <amount>\n"
+        "- admin text: set auto_run on/off\n"
         "- admin text: draft bounty\n"
         "- admin text: approve bounty\n"
         "- admin text: reject bounty\n"

@@ -38,6 +38,7 @@ cd web && npm run build
 - ENS resolution can fail if `web3` doesn't auto-load the ENS helper. Use `ENS.from_web3` when `w3.ens` is missing. Updated in `bot/src/ramus_bot/xmtp_bot.py`.
 - XMTP sender addresses may arrive as non-string types; coerce to string/hex before comparison in `bot/src/ramus_bot/xmtp_bot.py`.
 - Ethers v6 `Wallet.createRandom()` returns `HDNodeWallet` (private fields) and is not assignable to `Wallet`; avoid typing the helper as `Wallet` in `web/src/components/ChatPanel.tsx`.
+- `OPERATOR_ENS` is preferred when set; `OPERATOR_ADDRESS` is only used if ENS is blank or fails to resolve. See `bot/src/ramus_bot/xmtp_bot.py`.
 
 ## Dependencies
 
@@ -55,6 +56,10 @@ cd web && npm run build
 - The bot must be fully autonomous and explain winner selection.
 - POIDH bounties must involve real-world actions with proof.
 - Avoid assumptions about POIDH/XMTP APIs; verify with docs.
+- Operator is expected to be `deanpierce.eth` (set `OPERATOR_ENS` or `OPERATOR_ADDRESS` accordingly).
+- Runtime toggles (`AUTO_RUN`, bounty reward) are shared via `bot/src/ramus_bot/runtime.py` and can be updated over XMTP.
+- If no bounty reward is set, the bot uses ~10% of the wallet balance as the default reward (auto-run + admin defaults).
+- XMTP responses now emit stdout markers when processing/sent (`bot/src/ramus_bot/xmtp_bot.py`).
 
 ## Rapport & Reflection
 
@@ -67,3 +72,7 @@ cd web && npm run build
 1. Read it at the start of each task.
 2. Update it before you finish if you learned anything useful.
 3. Be specific: commands, paths, decisions, and pitfalls.
+
+## Workflow
+
+- Always commit and push after making changes (default to `origin/main`).

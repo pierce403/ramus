@@ -7,6 +7,7 @@ import os
 import re
 from datetime import datetime
 from dataclasses import replace
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,7 @@ from .evaluator import Evaluator, ScoreBreakdown
 from .models import BountyDraft, BountySpec, Decision
 from .poidh.client import PoidhClient
 from .protocol import Command, help_text, parse_command
+from .runtime import RuntimeSettings
 from .state import StateStore
 
 
@@ -39,11 +41,13 @@ class XmtpBot:
         poidh: PoidhClient,
         state: StateStore,
         evaluator: Evaluator,
+        runtime: RuntimeSettings,
     ) -> None:
         self.config = config
         self.poidh = poidh
         self.state = state
         self.evaluator = evaluator
+        self.runtime = runtime
         self._setup_notified: set[str] = set()
         self._operator_address: str | None = None
 
@@ -66,12 +70,14 @@ class XmtpBot:
             try:
                 text = str(ctx.message.content)
                 command = parse_command(text)
+                await self._announce_processing(ctx)
                 response = await self._handle_command(ctx, command)
                 setup_notice = self._setup_notice(ctx)
                 if setup_notice:
                     response = f"{setup_notice}\n\n{response}"
                 response = await self._apply_persona(response)
                 await ctx.send_text(response)
+                await self._announce_sent(ctx)
             except Exception as exc:
                 logger.exception("XMTP message handling failed")
                 fallback = self._format_error_for_user(exc)
@@ -144,6 +150,18 @@ class XmtpBot:
             logger.warning("XMTP sender unknown. Context fields={}", details)
         else:
             logger.debug("XMTP sender details: {}", details)
+
+    async def _announce_processing(self, ctx) -> None:
+        sender = await self._sender_address(ctx) or "unknown"
+        message = getattr(ctx, "message", None)
+        message_id = self._format_message_id(getattr(message, "id", None))
+        print(f"[ramus] Working on response sender={sender} id={message_id}", flush=True)
+
+    async def _announce_sent(self, ctx) -> None:
+        sender = await self._sender_address(ctx) or "unknown"
+        message = getattr(ctx, "message", None)
+        message_id = self._format_message_id(getattr(message, "id", None))
+        print(f"[ramus] Response sent sender={sender} id={message_id}", flush=True)
 
     async def _message_debug_fields(self, ctx) -> dict[str, str]:
         fields: dict[str, str] = {}
@@ -237,6 +255,45 @@ class XmtpBot:
         if self._operator_address:
             return self._operator_address
 
+        operator_ens = (self.config.operator_ens or "").strip()
+        if operator_ens:
+            if operator_ens.lower().startswith("0x"):
+                try:
+                    self._operator_address = Web3.to_checksum_address(operator_ens)
+                    return self._operator_address
+                except ValueError:
+                    logger.warning("Invalid OPERATOR_ENS address: {}", operator_ens)
+            else:
+                try:
+                    logger.info(
+                        "Resolving operator ENS {} via RPC {}",
+                        operator_ens,
+                        self.config.eth_mainnet_rpc_url,
+                    )
+                    w3 = Web3(Web3.HTTPProvider(self.config.eth_mainnet_rpc_url))
+                    if not w3.is_connected():
+                        logger.warning("Failed to connect to mainnet RPC for ENS resolution.")
+                    else:
+                        ens = getattr(w3, "ens", None)
+                        if ens is None and ENS is not None:
+                            try:
+                                ens = ENS.from_web3(w3)
+                            except Exception as exc:
+                                logger.warning("ENS resolver initialization failed: {}", exc)
+                                ens = None
+                        if ens is None:
+                            logger.info("ENS resolver not available; using registry fallback.")
+                            address = resolve_ens_via_registry(w3, operator_ens, log=logger.info)
+                        else:
+                            address = ens.address(operator_ens)
+                        if address:
+                            self._operator_address = Web3.to_checksum_address(address)
+                            logger.info("Resolved operator ENS {} to {}", operator_ens, self._operator_address)
+                            return self._operator_address
+                        logger.warning("Failed to resolve operator ENS: {}", operator_ens)
+                except Exception as exc:
+                    logger.warning("ENS resolution failed: {} ({})", exc, type(exc).__name__)
+
         if self.config.operator_address:
             try:
                 self._operator_address = Web3.to_checksum_address(self.config.operator_address)
@@ -245,47 +302,7 @@ class XmtpBot:
                 return None
             return self._operator_address
 
-        if not self.config.operator_ens:
-            return None
-        if self.config.operator_ens.lower().startswith("0x"):
-            try:
-                self._operator_address = Web3.to_checksum_address(self.config.operator_ens)
-                return self._operator_address
-            except ValueError:
-                logger.warning("Invalid OPERATOR_ENS address: {}", self.config.operator_ens)
-                return None
-
-        try:
-            logger.info(
-                "Resolving operator ENS {} via RPC {}",
-                self.config.operator_ens,
-                self.config.eth_mainnet_rpc_url,
-            )
-            w3 = Web3(Web3.HTTPProvider(self.config.eth_mainnet_rpc_url))
-            if not w3.is_connected():
-                logger.warning("Failed to connect to mainnet RPC for ENS resolution.")
-                return None
-            ens = getattr(w3, "ens", None)
-            if ens is None and ENS is not None:
-                try:
-                    ens = ENS.from_web3(w3)
-                except Exception as exc:
-                    logger.warning("ENS resolver initialization failed: {}", exc)
-                    ens = None
-            if ens is None:
-                logger.info("ENS resolver not available; using registry fallback.")
-                address = resolve_ens_via_registry(w3, self.config.operator_ens, log=logger.info)
-            else:
-                address = ens.address(self.config.operator_ens)
-            if not address:
-                logger.warning("Failed to resolve operator ENS: {}", self.config.operator_ens)
-                return None
-            self._operator_address = Web3.to_checksum_address(address)
-            logger.info("Resolved operator ENS {} to {}", self.config.operator_ens, self._operator_address)
-            return self._operator_address
-        except Exception as exc:
-            logger.warning("ENS resolution failed: {} ({})", exc, type(exc).__name__)
-            return None
+        return None
 
     def _namehash(self, name: str) -> bytes:
         return namehash(name)
@@ -444,25 +461,33 @@ class XmtpBot:
         bot_env = root_dir / "bot" / ".env"
         return bot_env
 
-    def _update_env_file(self, key: str, value: str) -> Path:
+    def _update_env_file(self, key: str, value: str | None) -> Path:
         env_path = self._env_file_path()
         env_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if not env_path.exists() and value is None:
+            os.environ.pop(key, None)
+            return env_path
 
         lines: list[str] = []
         if env_path.exists():
             lines = env_path.read_text(encoding="utf-8").splitlines()
 
         updated = False
-        for idx, line in enumerate(lines):
+        new_lines: list[str] = []
+        for line in lines:
             if line.startswith(f"{key}="):
-                lines[idx] = f"{key}={value}"
                 updated = True
-                break
+                if value is None:
+                    continue
+                new_lines.append(f"{key}={value}")
+            else:
+                new_lines.append(line)
 
-        if not updated:
-            lines.append(f"{key}={value}")
+        if not updated and value is not None:
+            new_lines.append(f"{key}={value}")
 
-        data = "\n".join(lines).rstrip("\n") + "\n"
+        data = "\n".join(new_lines).rstrip("\n") + "\n"
         if env_path.exists():
             env_path.write_text(data, encoding="utf-8")
         else:
@@ -470,8 +495,71 @@ class XmtpBot:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(data)
 
-        os.environ[key] = value
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
         return env_path
+
+    def _coerce_bool(self, value: Any) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return None
+        text = str(value).strip().lower()
+        if text in {"1", "true", "yes", "on", "enable", "enabled"}:
+            return True
+        if text in {"0", "false", "no", "off", "disable", "disabled"}:
+            return False
+        return None
+
+    def _format_settings(self) -> str:
+        snapshot = self.runtime.snapshot()
+        auto_run = "on" if snapshot.auto_run else "off"
+        reward_wei, reward_source = self._default_reward()
+        if reward_wei > 0:
+            reward_eth = Web3.from_wei(reward_wei, "ether")
+            reward_line = f"{reward_wei} wei (~{reward_eth} ETH) via {reward_source}"
+        else:
+            reward_line = f"not set ({reward_source})" if reward_source != "not set" else "not set"
+
+        if self.config.ai_score_endpoint:
+            ai_line = "custom endpoint"
+        elif self.config.venice_api_key:
+            ai_line = f"Venice ({self.config.venice_model})"
+        else:
+            ai_line = "off"
+
+        lines = [
+            "Settings:",
+            f"- Auto-run: {auto_run}",
+            f"- Bounty reward: {reward_line}",
+            f"- AI scoring: {ai_line}",
+        ]
+        return "\n".join(lines)
+
+    def _default_reward(self) -> tuple[int, str]:
+        snapshot = self.runtime.snapshot()
+        if snapshot.bounty_reward_wei > 0:
+            source_labels = {
+                "wei": "BOUNTY_REWARD_WEI",
+                "eth": "BOUNTY_REWARD_ETH",
+            }
+            reward_source = source_labels.get(snapshot.bounty_reward_source, snapshot.bounty_reward_source)
+            return snapshot.bounty_reward_wei, reward_source
+        try:
+            balance = self.poidh.wallet.web3.eth.get_balance(self.poidh.wallet.address)
+        except Exception:
+            return 0, "auto (10% wallet)"
+        if balance <= 0:
+            return 0, "auto (10% wallet)"
+        return balance // 10, "auto (10% wallet)"
+
+    def _handle_status(self) -> str:
+        active = self.state.get_active_bounty()
+        if not active:
+            return f"No active bounty.\n\n{self._format_settings()}"
+        return f"Active bounty: {active.bounty_id} (status {active.status}).\n\n{self._format_settings()}"
 
     async def _handle_admin_command(self, ctx, command: Command) -> str | None:
         if not await self._is_operator(ctx):
@@ -508,6 +596,68 @@ class XmtpBot:
             env_path = self._update_env_file("VENICE_MODEL", model)
             self.config = replace(self.config, venice_model=model)
             return f"VENICE_MODEL saved to {env_path}. Restart the bot to apply."
+
+        if command.action == "admin.set_bounty_reward_wei":
+            raw_value = command.payload.get("reward", command.payload.get("value", ""))
+            raw = str(raw_value).strip()
+            if not raw:
+                return (
+                    "Missing reward. Send {\"action\":\"admin.set_bounty_reward_wei\","
+                    "\"payload\":{\"reward\":123}} or 'set bounty_reward_wei 123'."
+                )
+            try:
+                reward_wei = int(raw)
+            except ValueError:
+                return "Invalid reward. Provide an integer amount in wei."
+            if reward_wei < 0:
+                return "Reward must be non-negative."
+            env_path = self._update_env_file("BOUNTY_REWARD_WEI", str(reward_wei))
+            self._update_env_file("BOUNTY_REWARD_ETH", None)
+            self.runtime.update_reward(reward_wei, "wei")
+            self.config = replace(
+                self.config,
+                bounty_reward_wei=reward_wei,
+                bounty_reward_source="wei",
+            )
+            return f"BOUNTY_REWARD_WEI saved to {env_path}. Auto-run reward updated."
+
+        if command.action == "admin.set_bounty_reward_eth":
+            raw_value = command.payload.get("reward", command.payload.get("value", ""))
+            raw = str(raw_value).strip()
+            if not raw:
+                return (
+                    "Missing reward. Send {\"action\":\"admin.set_bounty_reward_eth\","
+                    "\"payload\":{\"reward\":\"0.01\"}} or 'set bounty_reward_eth 0.01'."
+                )
+            try:
+                reward_eth = Decimal(raw)
+            except InvalidOperation:
+                return "Invalid reward. Provide a decimal ETH amount like 0.01."
+            if reward_eth < 0:
+                return "Reward must be non-negative."
+            reward_wei = int(reward_eth * Decimal("1000000000000000000"))
+            env_path = self._update_env_file("BOUNTY_REWARD_ETH", str(reward_eth))
+            self._update_env_file("BOUNTY_REWARD_WEI", None)
+            self.runtime.update_reward(reward_wei, "eth")
+            self.config = replace(
+                self.config,
+                bounty_reward_wei=reward_wei,
+                bounty_reward_source="eth",
+            )
+            return f"BOUNTY_REWARD_ETH saved to {env_path} (~{reward_wei} wei). Auto-run reward updated."
+
+        if command.action == "admin.set_auto_run":
+            enabled = self._coerce_bool(command.payload.get("enabled"))
+            if enabled is None:
+                return (
+                    "Missing value. Send {\"action\":\"admin.set_auto_run\","
+                    "\"payload\":{\"enabled\":true}} or 'set auto_run on/off'."
+                )
+            env_path = self._update_env_file("AUTO_RUN", "1" if enabled else "0")
+            self.runtime.update_auto_run(enabled)
+            self.config = replace(self.config, auto_run=enabled)
+            status = "enabled" if enabled else "disabled"
+            return f"AUTO_RUN saved to {env_path}. Auto-run {status}."
 
         return None
 
@@ -566,10 +716,9 @@ class XmtpBot:
         if command.action == "help":
             return help_text()
         if command.action == "status":
-            active = self.state.get_active_bounty()
-            if not active:
-                return "No active bounty."
-            return f"Active bounty: {active.bounty_id} (status {active.status})"
+            return self._handle_status()
+        if command.action == "settings":
+            return self._format_settings()
         if command.action == "freeform":
             if not allow_freeform:
                 return help_text()
@@ -814,10 +963,14 @@ class XmtpBot:
 
     def _format_bounty_draft(self, draft: BountyDraft) -> str:
         reward_wei = draft.reward_wei
+        default_reward, default_source = self._default_reward()
         reward_line = "Reward: not set"
         if reward_wei > 0:
             reward_eth = Web3.from_wei(reward_wei, "ether")
             reward_line = f"Reward: {reward_wei} wei (~{reward_eth} ETH)"
+        elif default_reward > 0:
+            default_eth = Web3.from_wei(default_reward, "ether")
+            reward_line = f"Reward: default {default_reward} wei (~{default_eth} ETH) via {default_source}"
         lines = [
             "Bounty draft ready:",
             f"Title: {draft.title}",
@@ -825,7 +978,7 @@ class XmtpBot:
             reward_line,
             "Reply 'approve bounty' to publish or 'reject bounty' to discard.",
         ]
-        if reward_wei <= 0:
+        if reward_wei <= 0 and default_reward <= 0:
             lines.insert(
                 3,
                 "Reward not set. Configure BOUNTY_REWARD_WEI or BOUNTY_REWARD_ETH before approval.",
@@ -857,8 +1010,14 @@ class XmtpBot:
         draft = self.state.get_latest_bounty_draft()
         if not draft:
             return "No draft to publish. Ask me to draft a bounty first."
-        reward_wei = draft.reward_wei or self.config.bounty_reward_wei
+        if draft.reward_wei > 0:
+            reward_wei = draft.reward_wei
+            reward_source = "draft"
+        else:
+            reward_wei, reward_source = self._default_reward()
         if reward_wei <= 0:
+            if reward_source.startswith("auto"):
+                return "Wallet balance is empty. Fund the wallet or set BOUNTY_REWARD_WEI/ETH before publishing."
             return "Set a positive bounty reward (BOUNTY_REWARD_WEI/ETH) before publishing."
 
         spec = BountySpec(title=draft.title, description=draft.description, reward_wei=reward_wei)
@@ -896,13 +1055,16 @@ class XmtpBot:
             )
         )
         reward_wei = command.payload.get("reward_wei")
+        reward_source = "payload"
         if reward_wei is None:
-            reward_wei = self.config.bounty_reward_wei
+            reward_wei, reward_source = self._default_reward()
         try:
             reward_wei_int = int(reward_wei)
         except (TypeError, ValueError):
             reward_wei_int = 0
         if reward_wei_int <= 0:
+            if reward_source.startswith("auto"):
+                return "Wallet balance is empty. Fund the wallet or set BOUNTY_REWARD_WEI/ETH before creating a bounty."
             return "Set a positive bounty reward (BOUNTY_REWARD_WEI/ETH) before creating a bounty."
 
         spec = BountySpec(title=title, description=description, reward_wei=reward_wei_int)
@@ -953,9 +1115,10 @@ class XmtpBot:
 
 async def run_xmtp_bot(
     config: BotConfig,
+    runtime: RuntimeSettings,
     poidh: PoidhClient,
     state: StateStore,
     evaluator: Evaluator,
 ) -> None:
-    bot = XmtpBot(config, poidh, state, evaluator)
+    bot = XmtpBot(config, poidh, state, evaluator, runtime)
     await bot.start()

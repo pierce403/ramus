@@ -36,7 +36,7 @@ python -m ramus_bot
 
 ### Key env vars (bot)
 
-See `bot/.env.example` and `docs/secrets.md`. If `WALLET_PRIVATE_KEY` is blank, Ramus generates a key and stores it at `WALLET_KEY_PATH`. XMTP uses the same wallet key (if `XMTP_WALLET_KEY` is set, it must match). Set `BOUNTY_REWARD_WEI` or `BOUNTY_REWARD_ETH` to enable automatic bounty creation. For AI scoring, set `VENICE_API_KEY`. Operator admin is controlled via `OPERATOR_ENS`/`OPERATOR_ADDRESS`.
+See `bot/.env.example` and `docs/secrets.md`. If `WALLET_PRIVATE_KEY` is blank, Ramus generates a key and stores it at `WALLET_KEY_PATH`. XMTP uses the same wallet key (if `XMTP_WALLET_KEY` is set, it must match). Set `BOUNTY_REWARD_WEI` or `BOUNTY_REWARD_ETH` (native chain token: ETH on Base/Arbitrum, DEGEN on Degen) to set a fixed automatic bounty reward; if unset, the bot uses 10% of the wallet balance. Toggle the runner with `AUTO_RUN`. For AI scoring, set `VENICE_API_KEY`. Operator admin is controlled via `OPERATOR_ENS`/`OPERATOR_ADDRESS`.
 
 ## Web setup
 

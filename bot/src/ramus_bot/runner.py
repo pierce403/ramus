@@ -12,12 +12,12 @@ from .evaluator import Evaluator
 from .models import BountySpec, Decision
 from .poidh.client import PoidhClient
 from .state import StateStore
+from .runtime import RuntimeSettings
 
 
 @dataclass(frozen=True)
 class RunnerConfig:
     poll_interval_seconds: int = 60
-    bounty_reward_wei: int = 0
     min_score_to_award: float = 1.5
 
 
@@ -29,12 +29,14 @@ class BotRunner:
         poidh: PoidhClient,
         evaluator: Evaluator,
         state: StateStore,
+        runtime: RuntimeSettings,
     ) -> None:
         self.config = config
         self.runner_config = runner_config
         self.poidh = poidh
         self.evaluator = evaluator
         self.state = state
+        self.runtime = runtime
 
     def run_forever(self) -> None:
         logger.info("Starting Ramus bot loop")
@@ -46,16 +48,22 @@ class BotRunner:
             time.sleep(self.runner_config.poll_interval_seconds)
 
     def run_once(self) -> None:
+        settings = self.runtime.snapshot()
+        if not settings.auto_run:
+            logger.info("Auto-run disabled; skipping runner cycle.")
+            return
         active = self.state.get_active_bounty()
         if not active:
-            if self.runner_config.bounty_reward_wei <= 0:
+            reward_wei = self._default_reward_wei(settings)
+            if reward_wei <= 0:
                 logger.warning(
-                    "No bounty reward configured. Set BOUNTY_REWARD_WEI or BOUNTY_REWARD_ETH to enable auto bounties."
+                    "No bounty reward configured and wallet balance is empty. "
+                    "Set BOUNTY_REWARD_WEI or BOUNTY_REWARD_ETH to enable auto bounties."
                 )
                 return
-            if not self._has_sufficient_balance(self.runner_config.bounty_reward_wei):
+            if not self._has_sufficient_balance(reward_wei):
                 return
-            bounty_id = self._create_default_bounty()
+            bounty_id = self._create_default_bounty(reward_wei)
             self.state.create_bounty(bounty_id)
             logger.info("Created bounty {}", bounty_id)
             return
@@ -96,14 +104,14 @@ class BotRunner:
         self.state.mark_bounty_closed(active.bounty_id)
         logger.info("Accepted claim {} for bounty {} (tx {})", decision.winner_claim_id, active.bounty_id, tx_hash)
 
-    def _create_default_bounty(self) -> int:
+    def _create_default_bounty(self, reward_wei: int) -> int:
         spec = BountySpec(
             title="Clean a local green space",
             description=(
                 "Pick up trash in a nearby park or green space and share before/after photos. "
                 "Include where you cleaned and how much you collected."
             ),
-            reward_wei=self.runner_config.bounty_reward_wei,
+            reward_wei=reward_wei,
             bounty_type="solo",
         )
         return self.poidh.create_bounty(spec)
@@ -118,3 +126,15 @@ class BotRunner:
             )
             return False
         return True
+
+    def _default_reward_wei(self, settings: RuntimeSettings) -> int:
+        if settings.bounty_reward_wei > 0:
+            return settings.bounty_reward_wei
+        try:
+            balance = self.poidh.wallet.web3.eth.get_balance(self.poidh.wallet.address)
+        except Exception as exc:
+            logger.warning("Failed to read wallet balance for auto reward: {}", exc)
+            return 0
+        if balance <= 0:
+            return 0
+        return balance // 10

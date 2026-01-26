@@ -18,3 +18,8 @@
 ```
 
 Use `action: "skip"` to halt payouts for a specific bounty.
+
+## Auto-run toggle
+
+- Set `AUTO_RUN=0` to disable the autonomous runner loop (manual XMTP admin commands still work).
+- If no bounty reward is configured, auto-run uses ~10% of the wallet balance.
