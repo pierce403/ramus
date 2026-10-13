@@ -44,6 +44,17 @@ cd web && npm run build
 
 ## Known Issues & Solutions
 
+- The web Vitest setup must import `@testing-library/jest-dom/vitest`.
+  The generic entry point expects a global `expect`, but this project's
+  `vitest.config.ts` does not enable Vitest globals. Before this correction,
+  `cd web && npm test` failed during setup with `expect is not defined`.
+- Once the setup runs, the old `/Ramus/i` text query is ambiguous because
+  multiple sections mention the name. Query the level-one heading by role.
+- `web/` is published by `.github/workflows/deploy-web.yml` only on a push to
+  `main`. For dependency updates, run `npm ci`, `npm run lint`, `npm test`,
+  `npm run build`, and `npm audit`; the React/XMTP UI still needs a browser
+  smoke check without signing or sending a wallet transaction. The workflow
+  uses Node 20; its web gates also passed locally under Node 20.20.2.
 - ENS resolution can fail if `web3` doesn't auto-load the ENS helper. Use `ENS.from_web3` when `w3.ens` is missing. Updated in `bot/src/ramus_bot/xmtp_bot.py`.
 - XMTP sender addresses may arrive as non-string types; coerce to string/hex before comparison in `bot/src/ramus_bot/xmtp_bot.py`.
 - Ethers v6 `Wallet.createRandom()` returns `HDNodeWallet` (private fields) and is not assignable to `Wallet`; avoid typing the helper as `Wallet` in `web/src/components/ChatPanel.tsx`.
