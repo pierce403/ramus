@@ -37,3 +37,8 @@ web/dist/
 *.tsbuildinfo
 web/vite.config.d.ts
 web/vite.config.js
+
+node_modules/
+.wrangler/
+dist/
+.cloudflare-tools/

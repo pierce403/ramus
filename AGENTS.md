@@ -110,3 +110,10 @@ cd web && npm run build
 ## Workflow
 
 - Always commit and push after making changes (default to `origin/main`).
+
+## Native static hosting
+
+Only web/ publishes to Cloudflare from main. npm ci, npm run lint, npm test and
+npm run check:deploy in web/ validate the port. Bot credentials, processes and
+bounty writers remain separate. Deployment credentials stay in Cloudflare;
+previews are disabled and original Pages recovery is retained.

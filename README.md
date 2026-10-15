@@ -82,3 +82,10 @@ Use `docs/bounty-runs/template.md` to document the run.
 ## License
 
 Apache 2.0 (see `LICENSE`).
+
+## Cloudflare publishing
+
+Native Git publishes main from /web using npm ci, npm run build:cloudflare
+and npm run deploy. Existing React/Vite generator and Pages recovery remain. Credentials stay
+in Cloudflare; previews stay off. A no-store native revision and artifact manifest
+allow exact public checks. The local bounty bot and wallet operations are not deployed.
